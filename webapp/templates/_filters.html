@@ -1,0 +1,96 @@
+{# Boczny panel filtrów. `action` = ścieżka docelowa, `show_status` /
+   `show_transcript` sterują widocznością sekcji zależnych od kontekstu. #}
+<form class="card card-pad filters" method="get" action="{{ action }}" data-autosubmit
+      aria-label="Filters">
+  <div class="field">
+    <label for="q">Search</label>
+    <input type="search" id="q" name="q" value="{{ f.q }}"
+           placeholder="e.g. beata review" autocomplete="off">
+    <p class="hint">Searches titles, names, emails and identifiers. Every word has to match.</p>
+  </div>
+
+  <div class="field">
+    <fieldset>
+      <legend>Meeting date</legend>
+      <div class="field-row">
+        <label class="visually-hidden" for="date_from">From</label>
+        <input type="date" id="date_from" name="date_from" value="{{ f.date_from.isoformat() if f.date_from else '' }}">
+        <label class="visually-hidden" for="date_to">To</label>
+        <input type="date" id="date_to" name="date_to" value="{{ f.date_to.isoformat() if f.date_to else '' }}">
+      </div>
+      <div class="quick">
+        <a href="{{ action }}{{ qs(qbase, date_from=days_ago(7), date_to=None, page=None) }}">7 days</a>
+        <a href="{{ action }}{{ qs(qbase, date_from=days_ago(30), date_to=None, page=None) }}">30 days</a>
+        <a href="{{ action }}{{ qs(qbase, date_from=None, date_to=None, page=None) }}">no limit</a>
+      </div>
+    </fieldset>
+  </div>
+
+  {% if show_status %}
+  <div class="field">
+    <fieldset>
+      <legend>Status</legend>
+      {% for key, label in STATUS_GROUPS.items() %}
+        <label class="check">
+          <input type="checkbox" name="status" value="{{ key }}" {{ 'checked' if key in f.statuses }}>
+          <span class="lbl">{{ label }}</span>
+          <span class="count">{{ facets.get(key, 0) }}</span>
+        </label>
+      {% endfor %}
+    </fieldset>
+  </div>
+  {% endif %}
+
+  {% if show_transcript %}
+  <div class="field">
+    <label for="transcript">Transcript</label>
+    <select name="transcript" id="transcript">
+      {% for key, label in TRANSCRIPT_FILTERS.items() %}
+        <option value="{{ key }}" {{ 'selected' if f.transcript == key }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+
+  <div class="field">
+    <fieldset>
+      <legend>Participants</legend>
+      {# Przy kilkudziesięciu osobach przewijanie do właściwej to mordęga.
+         Filtr jest czysto kliencki — nie ma atrybutu `name`, więc nic nie
+         dokłada do zapytania. #}
+      {% if people | length > 8 %}
+        <div class="scroll-search">
+          <label class="visually-hidden" for="people-filter">Narrow the list of people</label>
+          <input type="search" id="people-filter" placeholder="Narrow the list…"
+                 autocomplete="off" data-list-filter=".js-people">
+        </div>
+      {% endif %}
+      <div class="scroll js-people">
+        {% for p in people %}
+          <label class="check" data-filter-text="{{ (p.label ~ ' ' ~ (p.email or '')) | lower }}">
+            <input type="checkbox" name="participant" value="{{ p.key }}" {{ 'checked' if p.key in f.participants }}>
+            <span class="lbl" title="{{ p.email or p.label }}">{{ p.label }}</span>
+            <span class="count">{{ p.count }}</span>
+          </label>
+        {% else %}
+          <p class="hint" style="margin:0">No data yet — run a sync.</p>
+        {% endfor %}
+        <p class="scroll-empty" data-filter-empty hidden>Nobody matches that phrase.</p>
+      </div>
+      {% if people | length > 1 %}
+        <p class="hint">Several people at once = meetings where all of them were present.</p>
+      {% endif %}
+    </fieldset>
+  </div>
+
+  {# Sort jest na nagłówkach tabeli; tu tylko trzymamy bieżącą wartość,
+     żeby autosubmit filtrów jej nie gubił. #}
+  {% if f.sort and f.sort != 'date_desc' %}
+    <input type="hidden" name="sort" value="{{ f.sort }}">
+  {% endif %}
+
+  <div class="row">
+    <button class="btn btn-primary btn-sm" type="submit">Filter</button>
+    {% if f.is_active() %}<a class="btn btn-line btn-sm" href="{{ action }}">Clear</a>{% endif %}
+  </div>
+</form>

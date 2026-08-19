@@ -1,0 +1,149 @@
+{# =========================================================================
+   Współdzielone komponenty UI.
+
+   Zasada: jedna rzecz wygląda tak samo wszędzie. Jeśli badge statusu albo
+   pasek pobierania pojawia się w trzech widokach, ma tu jedno źródło prawdy.
+
+   Ilustracje: obiektowe, dwukolorowe (czerń + limonka), bez gradientów,
+   bez postaci. Dziedziczą kolory z tokenów, więc działają w dzień i w nocy.
+   Wszystkie są dekoracyjne — aria-hidden, stałe wymiary (zero layout shiftu).
+   ========================================================================= #}
+
+{# ---------- badge statusu ---------- #}
+{% macro badge(kind, code, label=None, title=None) -%}
+  <span class="badge b-{{ code }}"{% if title %} title="{{ title }}"{% endif %}
+        {%- if kind == 'job' %} data-job-status{% endif %}>{{ label or code }}</span>
+{%- endmacro %}
+
+{% macro job_badge(job) -%}
+  {{ badge('job', job.status, JOB_STATUSES.get(job.status, job.status), 'code: ' ~ job.status) }}
+{%- endmacro %}
+
+{% macro meeting_badge(m) -%}
+  {{ badge('meeting', m.status_group, STATUS_GROUPS[m.status_group],
+           'Recall: ' ~ (m.status_code or '?') ~ (' / ' ~ m.status_sub_code if m.status_sub_code else '')) }}
+{%- endmacro %}
+
+{# ---------- pasek postępu ----------
+   Skalowanie zamiast width — patrz .bar w app.css. #}
+{% macro progress(job) -%}
+  <div class="bar {{ 'err' if job.status == 'failed' }}"
+       role="progressbar" aria-valuenow="{{ job.progress }}" aria-valuemin="0" aria-valuemax="100"
+       aria-label="Job progress">
+    <i style="--p: {{ (job.progress / 100) | round(3) }}"></i>
+  </div>
+  <div class="t-sub" data-job-step>{{ job.step or JOB_STATUSES.get(job.status, job.status) }}</div>
+{%- endmacro %}
+
+{# ---------- pobieranie transkryptu ----------
+   `raw` tylko tam, gdzie surowa odpowiedź ASR ma sens (widok transkryptu). #}
+{% macro downloads(transcript, raw=False, size='btn-sm') -%}
+  <div class="dl">
+    <a class="btn btn-line {{ size }}" href="/transcripts/{{ transcript.id }}/download?fmt=txt"
+       title="Plain text, same format as the CLI">.txt</a>
+    <a class="btn btn-line {{ size }}" href="/transcripts/{{ transcript.id }}/download?fmt=md"
+       title="Markdown with a meeting header">.md</a>
+    <a class="btn btn-line {{ size }}" href="/transcripts/{{ transcript.id }}/download?fmt=vtt"
+       title="WebVTT subtitles">.vtt</a>
+    <a class="btn btn-line {{ size }}" href="/transcripts/{{ transcript.id }}/download?fmt=json"
+       title="Structured data: meeting, participants, utterances">.json</a>
+    {% if raw %}
+      <a class="btn btn-line {{ size }}" href="/transcripts/{{ transcript.id }}/download?fmt=raw"
+         title="Raw ElevenLabs response (for debugging)">.raw</a>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{# ---------- paginacja ---------- #}
+{% macro pager(page, pages, base) -%}
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Pagination">
+    {% if page > 1 %}<a href="{{ qs(base, page=page - 1) }}" rel="prev">‹ Previous</a>{% endif %}
+    <span class="cur" aria-current="page">{{ page }} / {{ pages }}</span>
+    {% if page < pages %}<a href="{{ qs(base, page=page + 1) }}" rel="next">Next ›</a>{% endif %}
+  </nav>
+  {% endif %}
+{%- endmacro %}
+
+{# ---------- stan pusty ---------- #}
+{% macro empty(art, title, body) -%}
+  <div class="card empty">
+    {{ art }}
+    <h2>{{ title }}</h2>
+    <p>{{ body }}</p>
+    <div class="row">{{ caller() if caller is defined }}</div>
+  </div>
+{%- endmacro %}
+
+{# =========================================================================
+   Ilustracje
+   ========================================================================= #}
+
+{# Fala dźwiękowa w kadrze — „nie ma czego pokazać z nagrań”. #}
+{% macro art_meetings(w=132, h=96) -%}
+<svg class="art" width="{{ w }}" height="{{ h }}" viewBox="0 0 132 96" fill="none" aria-hidden="true" focusable="false">
+  <rect x="9" y="14" width="114" height="68" rx="10" stroke="var(--line-strong)" stroke-width="2"/>
+  <path d="M9 30h114" stroke="var(--line-strong)" stroke-width="2"/>
+  <circle cx="20" cy="22" r="2.5" fill="var(--ink-3)"/>
+  <circle cx="29" cy="22" r="2.5" fill="var(--ink-3)"/>
+  <circle cx="38" cy="22" r="2.5" fill="var(--ink-3)"/>
+  <g stroke="var(--ink-3)" stroke-width="3.5" stroke-linecap="round">
+    <path d="M30 56v6M42 50v18M54 44v30"/>
+  </g>
+  <g stroke="var(--lime)" stroke-width="3.5" stroke-linecap="round">
+    <path d="M66 40v38M78 47v24"/>
+  </g>
+  <g stroke="var(--ink-3)" stroke-width="3.5" stroke-linecap="round">
+    <path d="M90 52v14M102 57v4"/>
+  </g>
+</svg>
+{%- endmacro %}
+
+{# Dokument z liniami tekstu i znacznikiem czasu — „brak transkryptów”. #}
+{% macro art_transcripts(w=132, h=96) -%}
+<svg class="art" width="{{ w }}" height="{{ h }}" viewBox="0 0 132 96" fill="none" aria-hidden="true" focusable="false">
+  <path d="M36 8h38l22 22v58a6 6 0 0 1-6 6H36a6 6 0 0 1-6-6V14a6 6 0 0 1 6-6Z"
+        stroke="var(--line-strong)" stroke-width="2"/>
+  <path d="M74 8v22h22" stroke="var(--line-strong)" stroke-width="2"/>
+  <g stroke="var(--ink-3)" stroke-width="3" stroke-linecap="round">
+    <path d="M42 46h14M64 46h26M42 58h22M72 58h18M42 70h12"/>
+  </g>
+  <path d="M56 70h30" stroke="var(--lime)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="96" cy="72" r="14" fill="var(--bg)" stroke="var(--lime)" stroke-width="2"/>
+  <path d="M96 65v7l5 3" stroke="var(--lime)" stroke-width="2" stroke-linecap="round"/>
+</svg>
+{%- endmacro %}
+
+{# Pusta taca z ptaszkiem — „kolejka przerobiona”. #}
+{% macro art_queue(w=132, h=96) -%}
+<svg class="art" width="{{ w }}" height="{{ h }}" viewBox="0 0 132 96" fill="none" aria-hidden="true" focusable="false">
+  <path d="M24 44h20l6 12h32l6-12h20v28a8 8 0 0 1-8 8H32a8 8 0 0 1-8-8V44Z"
+        stroke="var(--line-strong)" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M34 44 44 20h44l10 24" stroke="var(--line-strong)" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M54 30l8 8 16-16" stroke="var(--lime)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+{%- endmacro %}
+
+{# Zerwane ogniwo — strona błędu. Przerwa w środku musi być czytelna
+   przy 132 px, inaczej czyta się jako jeden nieuszkodzony łańcuch. #}
+{% macro art_error(w=132, h=96) -%}
+<svg class="art" width="{{ w }}" height="{{ h }}" viewBox="0 0 132 96" fill="none" aria-hidden="true" focusable="false">
+  <path d="M60 32H48a16 16 0 0 0 0 32h12" stroke="var(--line-strong)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M72 32h12a16 16 0 0 1 0 32H72" stroke="var(--line-strong)" stroke-width="4" stroke-linecap="round"/>
+  <g stroke="var(--lime)" stroke-width="3" stroke-linecap="round">
+    <path d="M66 16v9M66 71v9M50 20l5 8M82 20l-5 8"/>
+  </g>
+</svg>
+{%- endmacro %}
+
+{# Mikrofon z kanałami — znak marki na ekranie logowania. #}
+{% macro art_brand(w=96, h=96) -%}
+<svg class="art" width="{{ w }}" height="{{ h }}" viewBox="0 0 96 96" fill="none" aria-hidden="true" focusable="false">
+  <rect x="38" y="14" width="20" height="38" rx="10" fill="var(--lime)"/>
+  <path d="M28 44a20 20 0 0 0 40 0" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M48 64v14M36 78h24" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+  <g stroke="var(--ink-3)" stroke-width="3" stroke-linecap="round">
+    <path d="M16 34v12M80 34v12M6 38v4M90 38v4"/>
+  </g>
+</svg>
+{%- endmacro %}

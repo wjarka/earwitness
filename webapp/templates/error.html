@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}{{ code }} — {{ title }}{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="card empty" style="max-width:520px">
+    {{ ui.art_error() }}
+    <h2>{{ title }}</h2>
+    <p>{{ body }}</p>
+    {% if detail %}<p class="small mono">{{ detail }}</p>{% endif %}
+    <div class="row">
+      <a class="btn btn-primary" href="/meetings">Back to meetings</a>
+      {% if code == 401 %}<a class="btn btn-line" href="/login">Sign in</a>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

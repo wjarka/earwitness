@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}{{ m.title }} — transcript{% endblock %}
+{% block content %}
+
+<p class="small muted"><a href="/meetings/{{ m.id }}">‹ {{ m.title }}</a></p>
+<div class="row-between head">
+  <div>
+    <h1>{{ m.title }}<span class="u">_</span></h1>
+    <p class="sub" style="margin:0">
+      {{ m.occurred_at | dt('%Y-%m-%d, %H:%M') }} · {{ t.duration_seconds | dur }} ·
+      {{ utterances | length }} utterances · {{ t.word_count }} words
+    </p>
+  </div>
+  <div class="row">
+    <button class="btn btn-line btn-sm" data-copy="#transcript-body">Copy all</button>
+    {{ ui.downloads(t, raw=True) }}
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-bottom:var(--s4)">
+  <div class="row">
+    <div style="flex:1; min-width:240px">
+      <label class="visually-hidden" for="tsearch">Search the transcript</label>
+      <input type="search" id="tsearch" placeholder="Search the transcript…" data-transcript-search autocomplete="off">
+    </div>
+    <div style="width:230px">
+      <label class="visually-hidden" for="spfilter">Filter by speaker</label>
+      <select id="spfilter" data-speaker-filter>
+        <option value="">All speakers</option>
+        {% for s in speakers %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+    </div>
+    <span class="small muted" data-transcript-count role="status" aria-live="polite"></span>
+  </div>
+  <div class="people" style="margin-top:var(--s3)">
+    {% for s in t.speakers or [] %}
+      <span class="person" title="Total speaking time">{{ s.name }} · {{ s.seconds | dur }}</span>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card card-pad">
+  <div class="utts" id="transcript-body">
+    {% for u in utterances %}
+      <div class="utt" data-speaker="{{ u.speaker }}" data-text="{{ (u.speaker ~ ' ' ~ u.text) | lower }}">
+        <span class="ts">{{ u.timestamp }}</span>
+        <span class="sp">{{ u.speaker }}</span>
+        <span class="tx">{{ u.text }}</span>
+      </div>
+    {% endfor %}
+  </div>
+  {# Stan pusty wyszukiwania — pokazywany przez JS, gdy nic nie pasuje. #}
+  <div class="empty" data-search-empty hidden>
+    <h2>No matches</h2>
+    <p>No utterance contains that phrase. Try a shorter word.</p>
+  </div>
+</div>
+{% endblock %}

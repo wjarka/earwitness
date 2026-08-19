@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="card card-pad login">
+    {{ ui.art_brand() }}
+    <h1>Earwitness<span class="u">_</span></h1>
+    <p class="sub">Meetings from Recall.ai, transcribed and split by speaker.</p>
+
+    {% if error %}
+      <div class="notice notice-err" role="alert" style="text-align:left">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+          <path d="M12 7v6M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>{{ error }}</div>
+      </div>
+    {% endif %}
+
+    {% if configured %}
+      <a class="gbtn" href="/auth/google?next={{ next | urlencode }}">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45 24.5c0-1.6-.1-2.8-.4-4H24v7.3h12c-.2 2-1.5 5-4.4 7l6.7 5.2c4-3.7 6.7-9.1 6.7-15.5z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.9-5.4c-1.9 1.3-4.4 2.2-7.6 2.2-5.8 0-10.7-3.8-12.5-9.1l-7.1 5.5C8.1 41 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.5 28.4c-.5-1.4-.7-2.9-.7-4.4s.3-3 .7-4.4l-7.1-5.5C2.9 17 2 20.4 2 24s.9 7 2.4 9.9l7.1-5.5z"/><path fill="#EA4335" d="M24 10.2c3.3 0 5.5 1.4 6.8 2.6l5.9-5.8C33.1 3.6 28.1 1.5 24 1.5 15.4 1.5 8.1 6.5 4.4 14.1l7.1 5.5c1.8-5.3 6.7-9.4 12.5-9.4z"/></svg>
+        Sign in with Google
+      </a>
+      <p class="hint" style="margin-top:var(--s4)">
+        We ask for <strong>read-only</strong> calendar access — that is where meeting
+        titles and the invitee list come from.
+        {% if domains %}<br>We allow accounts from these domains: <strong>{{ domains | join(', ') }}</strong>.{% endif %}
+      </p>
+    {% else %}
+      <div class="notice notice-warn" style="text-align:left">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 4l9 16H3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M12 10v4M12 17.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <strong>Sign-in is not configured.</strong><br>
+          Set <span class="mono">GOOGLE_CLIENT_ID</span> and <span class="mono">GOOGLE_CLIENT_SECRET</span>
+          in <span class="mono">.env</span>, or <span class="mono">AUTH_DISABLED=1</span> while working locally.
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

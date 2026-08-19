@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}{{ m.title }}{% endblock %}
+{% block content %}
+
+<p class="small muted"><a href="/meetings">‹ Meetings</a></p>
+<div class="row-between head">
+  <div>
+    <h1>{{ m.title }}<span class="u">_</span></h1>
+    <p class="sub" style="margin:0">
+      {{ m.occurred_at | dt('%Y-%m-%d, %H:%M') }} · {{ m.duration_seconds | dur }} ·
+      {{ ui.meeting_badge(m) }}
+      {%- if m.meeting_url %} · <a href="{{ m.meeting_url }}" rel="noopener" target="_blank">meeting link</a>{% endif %}
+      {%- if m.calendar_html_link %} · <a href="{{ m.calendar_html_link }}" rel="noopener" target="_blank">in calendar</a>{% endif %}
+    </p>
+  </div>
+  {# Jeden przycisk, bo użytkownik ma jedną intencję: chcę tekst tego
+     spotkania. Który etap trzeba odpalić (pobranie, ASR, diaryzacja) wie
+     `process` — pobieranie pomija komplet na dysku, ASR reużywa raw.json.
+     Jedyny wybór, który naprawdę należy do człowieka, to „czy zapłacić za
+     ASR jeszcze raz” — i ten wybór ma własne potwierdzenie, nie modyfikator. #}
+  <form method="post" action="/meetings/{{ m.id }}/enqueue" class="row" data-busy-form>
+    {% if m.recording_id %}
+      {% if m.transcript_state == 'ready' %}
+        <input type="hidden" name="force_asr" value="true">
+        <button class="btn btn-primary" name="kind" value="process"
+                data-busy-label="Queueing…" data-confirm="redo-confirm">Redo transcript</button>
+      {% else %}
+        <button class="btn btn-primary" name="kind" value="process"
+                data-busy-label="Queueing…">Get transcript</button>
+      {% endif %}
+    {% else %}
+      <span class="badge b-none">No recording</span>
+    {% endif %}
+  </form>
+</div>
+
+{% if m.recording_id and m.transcript_state == 'ready' %}
+  {# Natywny <dialog>: fokus, Esc i inertność tła dostajemy od przeglądarki.
+     Kwota jest nie do pokazania (zależy od cennika ASR), więc pokazujemy to,
+     co realnie steruje rachunkiem — długość nagrania. #}
+  <dialog class="modal" id="redo-confirm" aria-labelledby="redo-confirm-title">
+    <h2 id="redo-confirm-title">Redo this transcript?</h2>
+    <p>
+      This re-runs paid transcription{% if m.duration_seconds %} on a
+      {{ m.duration_seconds | dur }} recording{% endif %}. The existing transcript
+      is kept — the new one is added alongside it.
+    </p>
+    {# Anuluj zamyka dialog natywnie (method="dialog"). Potwierdzenie jest
+       `type="button"`, bo submit robimy sami na właściwym formularzu wyżej. #}
+    <form method="dialog" class="row">
+      <button class="btn btn-line" value="cancel">Cancel</button>
+      <button class="btn btn-primary" type="button" data-confirm-ok>Redo transcript</button>
+    </form>
+  </dialog>
+{% endif %}
+
+{% set hint = status_hint(m.status_sub_code) %}
+{% if m.transcript_error %}
+  <div class="notice notice-err" role="alert">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+      <path d="M12 7v6M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div><strong>Transcription failed.</strong><br>{{ m.transcript_error }}<br>
+      <span class="small">You can retry the job below — the raw ASR result is kept, so a retry does not pay for transcription twice.</span>
+    </div>
+  </div>
+{% elif m.asset_error %}
+  <div class="notice notice-warn" role="alert">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 4l9 16H3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M12 10v4M12 17.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div><strong>Could not download the audio.</strong><br>{{ m.asset_error }}</div>
+  </div>
+{% elif m.asset_state != 'ready' and m.media_expires_at and m.media_expires_at < now %}
+  <div class="notice notice-warn" role="status">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+      <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div><strong>The audio expired on {{ m.media_expires_at | dt }}.</strong><br>
+      Recall keeps recordings for 24 hours. This meeting can no longer be transcribed.</div>
+  </div>
+{% elif m.status_group == 'expired' and m.asset_state != 'ready' %}
+  <div class="notice notice-warn" role="status">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+      <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div><strong>Recall deleted the recording.</strong><br>
+      Files live for 24 hours after the meeting ends. This audio cannot be recovered —
+      to avoid this in the future, turn on automatic processing after a sync.
+      {%- if hint %}<br><span class="small">{{ hint }}</span>{% endif %}</div>
+  </div>
+{% elif hint %}
+  <div class="notice notice-warn" role="status">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+      <path d="M12 11v5M12 7.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div>{{ hint }}</div>
+  </div>
+{% endif %}
+
+<div class="split-detail">
+  <div>
+    <div class="card card-pad">
+      <div class="row-between" style="margin-bottom:var(--s3)">
+        <h2 style="margin:0">Transcript</h2>
+        {% if transcript %}
+          <div class="row">
+            <a class="btn btn-line btn-sm" href="/transcripts/{{ transcript.id }}">Full view</a>
+            {{ ui.downloads(transcript) }}
+          </div>
+        {% endif %}
+      </div>
+
+      {% if preview %}
+        <div class="utts">
+          {% for u in preview %}
+            <div class="utt">
+              <span class="ts">{{ u.timestamp }}</span>
+              <span class="sp">{{ u.speaker }}</span>
+              <span class="tx">{{ u.text }}</span>
+            </div>
+          {% endfor %}
+        </div>
+        {% if transcript.utterance_count > preview | length %}
+          <p class="small muted" style="margin-top:var(--s3)">
+            Another {{ transcript.utterance_count - preview | length }} utterances in the
+            <a href="/transcripts/{{ transcript.id }}">full view</a>.
+          </p>
+        {% endif %}
+      {% elif m.transcript_state in ('queued', 'running') %}
+        {# Wynik jest w drodze — pokazujemy szkielet w docelowej geometrii,
+           żeby po odświeżeniu tekst nie przeskoczył. #}
+        <p class="muted small" aria-live="polite">Processing in progress. Progress and log below.</p>
+        <div class="utts" aria-busy="true" aria-label="Transcript being prepared">
+          {% for w in [58, 74, 40, 66] %}
+            <div class="utt">
+              <span class="ts sk" style="height:14px"></span>
+              <span class="sp sk" style="height:14px; width:70%"></span>
+              <span class="tx sk" style="height:14px; width:{{ w }}%"></span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No transcript yet.
+          {%- if m.recording_id %} Kick off processing with the button above.{% endif %}</p>
+      {% endif %}
+    </div>
+
+    <div class="card card-pad">
+      <h2>Jobs</h2>
+      {% if jobs %}
+        <div class="table-wrap">
+        <table>
+          <caption class="visually-hidden">Jobs for this meeting</caption>
+          <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Progress</th><th>When</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+          <tbody>
+          {% for j in jobs %}
+            <tr data-job-id="{{ j.id }}" {% if j.status in ('queued', 'running') %}data-job-active{% endif %}>
+              <td data-label="Number" class="mono">{{ j.id }}</td>
+              <td data-label="Job">
+                <div>{{ j.kind | kind }}<div class="t-sub">{{ j.created_by or 'automatic' }}</div></div>
+              </td>
+              <td data-label="Status">{{ ui.job_badge(j) }}</td>
+              <td data-label="Progress" style="min-width:150px"><div style="flex:1">{{ ui.progress(j) }}</div></td>
+              <td data-label="When" class="t-sub nowrap">{{ j.created_at | ago }}</td>
+              <td data-label="">
+                {% if j.status in ('failed', 'canceled', 'done') %}
+                  <form method="post" action="/jobs/{{ j.id }}/retry" class="inline" data-busy-form>
+                    <button class="btn btn-line btn-sm" data-busy-label="…">Retry</button>
+                  </form>
+                {% elif j.status == 'queued' %}
+                  <form method="post" action="/jobs/{{ j.id }}/cancel" class="inline" data-busy-form>
+                    <button class="btn btn-line btn-sm" data-busy-label="…">Cancel</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+
+        {% set live = jobs | selectattr('status', 'in', ['queued', 'running']) | list %}
+        {% if live %}
+          <h3 style="margin-top:var(--s5)">Log for job #{{ live[0].id }}</h3>
+          <pre class="log" data-job-log="{{ live[0].id }}" aria-live="polite" aria-busy="true">Waiting for the first lines…</pre>
+        {% elif jobs[0].log %}
+          <h3 style="margin-top:var(--s5)">Log for job #{{ jobs[0].id }}</h3>
+          <pre class="log">{{ jobs[0].log }}</pre>
+        {% endif %}
+      {% else %}
+        <p class="muted">Nothing has been run for this meeting yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <aside>
+    <div class="card card-pad">
+      <h3>Participants</h3>
+      {% for p in m.participants | sort(attribute='source') %}
+        <div class="row-between" style="padding:var(--s1) 0; border-bottom:1px solid var(--line)">
+          <div>
+            <div>{{ p.display }}{% if p.is_host %} <span class="badge">host</span>{% endif %}</div>
+            <div class="t-sub">
+              {{ 'attended' if p.source == 'recall' else 'invited' }}
+              {%- if p.email %} · {{ p.email }}{% endif %}
+              {%- if p.is_bot %} · bot{% endif %}
+            </div>
+          </div>
+          {% if p.speaking_seconds %}<span class="badge b-ready nowrap">{{ p.speaking_seconds | dur }}</span>{% endif %}
+        </div>
+      {% else %}
+        <p class="muted small">No participant data.</p>
+      {% endfor %}
+    </div>
+
+    <div class="card card-pad">
+      <h3>State</h3>
+      <div class="stats">
+        <div class="stat">
+          <b><span class="badge b-{{ m.asset_state }}">{{ m.asset_state | assetstate }}</span></b>
+          <span>audio</span>
+        </div>
+        <div class="stat">
+          <b><span class="badge b-{{ m.transcript_state }}">{{ m.transcript_state | tstate }}</span></b>
+          <span>transcript</span>
+        </div>
+      </div>
+      <table class="kv" style="margin-top:var(--s3)">
+        <tbody>
+          <tr><td>Platform</td><td>{{ m.platform | platform }}</td></tr>
+          <tr><td>Status in Recall</td><td class="mono">{{ m.status_code }}{{ ' / ' ~ m.status_sub_code if m.status_sub_code }}</td></tr>
+          <tr><td>Audio expires</td><td>{{ m.media_expires_at | dt }}</td></tr>
+          <tr><td>Last sync</td><td>{{ m.synced_at | ago }}</td></tr>
+          <tr><td>Bot ID</td><td class="mono">{{ m.id }}</td></tr>
+          <tr><td>Recording ID</td><td class="mono">{{ m.recording_id or '—' }}</td></tr>
+          {% if m.asset_dir %}<tr><td>Files</td><td class="mono small">{{ m.asset_dir }}</td></tr>{% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if transcript %}
+    <div class="card card-pad">
+      <h3>Diarization</h3>
+      <div class="stats">
+        <div class="stat"><b>{{ (transcript.speakers or []) | length }}</b><span>speakers</span></div>
+        <div class="stat"><b>{{ transcript.utterance_count }}</b><span>utterances</span></div>
+        <div class="stat"><b>{{ transcript.word_count }}</b><span>words</span></div>
+      </div>
+      {% if transcript.stats %}
+        <table class="kv" style="margin-top:var(--s2)">
+          <tbody>
+            <tr><td title="Words where two channels had comparable energy">Disputed words</td>
+                <td class="num">{{ transcript.stats.get('disputed', 0) }} of {{ transcript.stats.get('total', 0) }}</td></tr>
+            <tr><td title="Disputed segments settled by an extra ASR pass">Tiebreaks</td>
+                <td class="num">{{ transcript.stats.get('tiebreak_confirmed', 0) }}</td></tr>
+            {% if transcript.stats.get('recovery_words') is not none %}
+              <tr><td title="Words of the quieter speaker recovered from the isolated channel">Recovered words</td>
+                  <td class="num">{{ transcript.stats.get('recovery_words') }}</td></tr>
+            {% endif %}
+            <tr><td>Language</td><td>{{ transcript.language or '—' }}</td></tr>
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

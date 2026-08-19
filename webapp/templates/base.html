@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Earwitness{% endblock %}</title>
+  {# Font ładowany zanim przeglądarka natrafi na niego w CSS — bez tego
+     pierwszy paint leci fallbackiem i tekst przeskakuje. #}
+  <link rel="preload" href="/static/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/app.css?v=20260812-sort2">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎙️</text></svg>">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="/meetings">Earwitness<span class="brand-mark">_</span></a>
+  <nav class="nav" aria-label="Main">
+    {% set path = request.url.path %}
+    {% for href, text in [('/meetings', 'Meetings'), ('/transcripts', 'Transcripts'), ('/jobs', 'Queue')] %}
+      {% set on = path.startswith(href) %}
+      <a href="{{ href }}"{% if on %} class="on" aria-current="page"{% endif %}>{{ text }}{% if href == '/jobs' and queue and (queue.queued or queue.running) %}<span class="pill pill-live">{{ queue.queued + queue.running }}</span>{% endif %}</a>
+    {% endfor %}
+  </nav>
+  <div class="spacer"></div>
+  {% if user %}
+  {# Sync żyje na liście spotkań, razem ze swoimi opcjami i informacją „Last
+     sync". Drugi przycisk w topbarze robił dokładnie to samo pod inną nazwą,
+     więc na tej samej stronie stały dwa „Sync" o nieoczywistej różnicy. #}
+  <div class="me">
+    {% if user.picture %}<img src="{{ user.picture }}" alt="" referrerpolicy="no-referrer" width="30" height="30">{% endif %}
+    <div class="me-txt">
+      <strong>{{ user.name or user.email }}</strong>
+      <small>{{ user.email }}{% if not user.calendar_scope_granted and not settings.auth_disabled %} · <span class="warn-inline">no calendar</span>{% endif %}</small>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="/logout">Sign out</a>
+  </div>
+  {% endif %}
+</header>
+
+<main class="wrap" id="main">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="foot">
+  <span>Recall.ai → ElevenLabs Scribe → channel-energy diarization</span>
+</footer>
+<script src="/static/app.js?v=20260812-sort" defer></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# Lokalny dev/test: dwa procesy, jeden trwały wolumen (/app/output = SQLite
+# + assety Recall + transkrypty — dysk jest źródłem prawdy).
+#
+# Na platformie (np. Komodo): to samo, ale bez `ports:`/`build:` — serwisy
+# wskazują obraz z Dockerfile, a wolumen pod /app/output. Jeśli platforma
+# nie pozwala podpiąć tego samego wolumenu pod dwa serwisy, zrób JEDEN
+# serwis z SERVICE=all.
+name: earwitness
+
+services:
+  web:
+    build: .
+    image: earwitness
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      SERVICE: web
+      # The container always listens on 8000; HOST_PORT is the local host port.
+      PORT: "8000"
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    volumes:
+      - data:/app/output
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    image: earwitness
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      SERVICE: worker
+    volumes:
+      - data:/app/output
+
+volumes:
+  data:

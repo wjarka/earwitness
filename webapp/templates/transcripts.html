@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}Transcripts{% endblock %}
+{% block content %}
+
+<div class="head">
+  <h1>Transcripts<span class="u">_</span></h1>
+  <p class="sub" style="margin:0">
+    {{ total }} {{ 'transcript' if total == 1 else 'transcripts' }} ready.
+  </p>
+</div>
+
+<div class="split">
+  {% with action='/transcripts', show_status=False, show_transcript=False, facets={} %}
+    {% include "_filters.html" %}
+  {% endwith %}
+
+  <div>
+    {% if rows %}
+    <div class="card table-wrap">
+      <table>
+        <caption class="visually-hidden">List of transcripts</caption>
+        <thead>
+          <tr>
+            <th>Meeting</th>
+            <th class="nowrap">Date</th>
+            <th>Speakers</th>
+            <th class="nowrap">Size</th>
+            <th>Download</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for t, m in rows %}
+          <tr>
+            <td data-label="Meeting">
+              <div>
+                <a class="t-title" href="/transcripts/{{ t.id }}">{{ m.title }}</a>
+                <div class="t-sub">{{ m.platform | platform }}{% if t.language %} · {{ t.language }}{% endif %}</div>
+              </div>
+            </td>
+            <td data-label="Date" class="nowrap t-sub">{{ m.occurred_at | dt }}</td>
+            <td data-label="Speakers">
+              <div class="people">
+                {% for s in t.speakers or [] %}
+                  <span class="person" title="Spoke for {{ s.seconds | dur }}">{{ s.name }}</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td data-label="Size" class="nowrap t-sub num">
+              <div>
+                {{ t.utterance_count }} utterances<br>{{ t.word_count }} words · {{ t.duration_seconds | dur }}
+              </div>
+            </td>
+            <td data-label="Download">{{ ui.downloads(t) }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {{ ui.pager(f.page, pages, qbase) }}
+
+    {% elif f.is_active() %}
+      {% call ui.empty(ui.art_transcripts(), 'Nothing matches the filters',
+                       'No finished transcript meets these conditions.') %}
+        <a class="btn btn-primary" href="/transcripts">Clear filters</a>
+      {% endcall %}
+    {% else %}
+      {% call ui.empty(ui.art_transcripts(), 'No transcripts yet',
+                       'Pick a finished meeting with a recording and kick off processing — it comes back here split by speaker.') %}
+        <a class="btn btn-primary" href="/meetings?status=done&transcript=none">Find a meeting to process</a>
+      {% endcall %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}Queue{% endblock %}
+{% block content %}
+
+<div class="row-between head">
+  <div>
+    <h1>Queue<span class="u">_</span></h1>
+    <p class="sub" style="margin:0">
+      {{ queue.queued }} waiting · {{ queue.running }} in progress · {{ queue.failed }} failed.
+    </p>
+  </div>
+  <div class="row" role="group" aria-label="Status filter">
+    <a class="btn btn-sm {{ 'btn-primary' if not status else 'btn-line' }}" href="/jobs">All</a>
+    <a class="btn btn-sm {{ 'btn-primary' if status == 'running' else 'btn-line' }}" href="/jobs?status=running">In progress</a>
+    <a class="btn btn-sm {{ 'btn-primary' if status == 'queued' else 'btn-line' }}" href="/jobs?status=queued">Waiting</a>
+    <a class="btn btn-sm {{ 'btn-primary' if status == 'failed' else 'btn-line' }}" href="/jobs?status=failed">Failed</a>
+  </div>
+</div>
+
+{% if queue.queued and not queue.running %}
+<div class="notice notice-warn" role="status">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+    <path d="M12 7v6M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+  <div>
+    <strong>Jobs are waiting, but nothing is picking them up.</strong><br>
+    Check that the worker is running: <span class="mono">uv run python -m webapp.worker</span>
+  </div>
+</div>
+{% endif %}
+
+{% if jobs %}
+<div class="card table-wrap">
+  <table>
+    <caption class="visually-hidden">Job history</caption>
+    <thead>
+      <tr>
+        <th style="width:64px">#</th>
+        <th>Job</th>
+        <th>Meeting</th>
+        <th>Status</th>
+        <th style="width:200px">Progress</th>
+        <th class="nowrap">Time</th>
+        <th><span class="visually-hidden">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for j in jobs %}
+      <tr data-job-id="{{ j.id }}" {% if j.status in ('queued', 'running') %}data-job-active{% endif %}>
+        <td data-label="Number" class="mono">{{ j.id }}</td>
+        <td data-label="Job">
+          <div>
+            {{ j.kind | kind }}
+            <div class="t-sub">
+              {{ j.created_by or 'automatic' }}{% if j.attempts > 1 %} · attempt {{ j.attempts }} of {{ j.max_attempts }}{% endif %}
+            </div>
+          </div>
+        </td>
+        <td data-label="Meeting">
+          {% if j.meeting %}
+            <a href="/meetings/{{ j.meeting_id }}">{{ j.meeting.title }}</a>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td data-label="Status">
+          <div>
+            {{ ui.job_badge(j) }}
+            {% if j.error %}<div class="t-sub" style="color:var(--red); max-width:340px">{{ j.error.splitlines()[0][:160] }}</div>{% endif %}
+          </div>
+        </td>
+        <td data-label="Progress"><div style="flex:1">{{ ui.progress(j) }}</div></td>
+        <td data-label="Time" class="t-sub nowrap">
+          <div>
+            {{ j.created_at | ago }}
+            {% if j.started_at and j.finished_at %}
+              <div>took {{ (j.finished_at - j.started_at).total_seconds() | dur }}</div>
+            {% endif %}
+          </div>
+        </td>
+        <td data-label="" class="nowrap">
+          {% if j.status in ('failed', 'canceled', 'done') %}
+            <form method="post" action="/jobs/{{ j.id }}/retry" class="inline" data-busy-form>
+              <button class="btn btn-line btn-sm" data-busy-label="…">Retry</button>
+            </form>
+          {% elif j.status == 'queued' %}
+            <form method="post" action="/jobs/{{ j.id }}/cancel" class="inline" data-busy-form>
+              <button class="btn btn-line btn-sm" data-busy-label="…">Cancel</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if pages > 1 %}
+<nav class="pager" aria-label="Pagination">
+  {% if page > 1 %}<a href="/jobs?{{ 'status=' ~ status ~ '&' if status }}page={{ page - 1 }}" rel="prev">‹ Previous</a>{% endif %}
+  <span class="cur" aria-current="page">{{ page }} / {{ pages }}</span>
+  {% if page < pages %}<a href="/jobs?{{ 'status=' ~ status ~ '&' if status }}page={{ page + 1 }}" rel="next">Next ›</a>{% endif %}
+</nav>
+{% endif %}
+
+{% elif status %}
+  {% call ui.empty(ui.art_queue(), 'No jobs with this status', 'Change the filter to see the rest.') %}
+    <a class="btn btn-primary" href="/jobs">Show all</a>
+  {% endcall %}
+{% else %}
+  {% call ui.empty(ui.art_queue(), 'The queue is empty', 'Nothing is waiting and nothing is running. Kick off processing from the meetings list.') %}
+    <a class="btn btn-primary" href="/meetings">Go to meetings</a>
+  {% endcall %}
+{% endif %}
+{% endblock %}

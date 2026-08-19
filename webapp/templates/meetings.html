@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}Meetings{% endblock %}
+{% block content %}
+
+<div class="row-between head">
+  <div>
+    <h1>Meetings<span class="u">_</span></h1>
+    <p class="sub" style="margin:0">
+      {{ total }} {{ 'meeting' if total == 1 else 'meetings' }}{% if f.is_active() %} after filtering{% endif %}.
+      Last sync: {{ last_sync | ago }}.
+    </p>
+  </div>
+  <div class="head-actions">
+    <form method="post" action="/sync" class="row" data-busy-form>
+      <label class="check small"><input type="checkbox" name="with_calendar" value="true" checked> titles from calendar</label>
+      <label class="check small" title="Right after the sync, queues download and transcription of finished recordings. Note: this costs money.">
+        <input type="checkbox" name="autoprocess" value="true"> process automatically
+      </label>
+      <button class="btn btn-primary" data-busy-label="Syncing…">Sync with Recall.ai</button>
+    </form>
+    {% if untitled %}
+    {# Sync pyta kalendarz tylko o okno wokół „teraz"; starsze spotkania
+       potrzebują szerszego zapytania, więc to osobna akcja — ale należy do
+       tej samej grupy „odśwież dane", nie pod nagłówek. #}
+    <form method="post" action="/backfill-titles" class="row" data-busy-form>
+      <button class="btn btn-line btn-sm" data-busy-label="Fetching…"
+              title="Searches the calendar across the full date range of those meetings, not just the recent sync window.">
+        Fetch {{ untitled }} missing {{ 'title' if untitled == 1 else 'titles' }}
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="split">
+  {# Chipy POD formularzem: nad checkboxami przy pierwszym filtrze zsuwały
+     listę pod kursor. Rosną w dół — punkty kliknięcia filtrów stoją w miejscu. #}
+  <div class="filters-col">
+    {% with action='/meetings', show_status=True, show_transcript=True %}
+      {% include "_filters.html" %}
+    {% endwith %}
+    {% if f.is_active() %}
+    <div class="chips" aria-label="Active filters">
+      {% if f.q %}<span class="chip">“{{ f.q }}” <a href="{{ qs(qbase, q=None, page=None) }}" aria-label="Remove text filter">×</a></span>{% endif %}
+      {% for s in f.statuses %}<span class="chip">{{ STATUS_GROUPS[s] }} <a href="{{ qs(qbase, status=f.statuses | reject('equalto', s) | list, page=None) }}" aria-label="Remove status filter">×</a></span>{% endfor %}
+      {% for p in f.participants %}<span class="chip">{{ p }} <a href="{{ qs(qbase, participant=f.participants | reject('equalto', p) | list, page=None) }}" aria-label="Remove person filter">×</a></span>{% endfor %}
+      {% if f.date_from %}<span class="chip">from {{ f.date_from }} <a href="{{ qs(qbase, date_from=None, page=None) }}" aria-label="Remove start date">×</a></span>{% endif %}
+      {% if f.date_to %}<span class="chip">to {{ f.date_to }} <a href="{{ qs(qbase, date_to=None, page=None) }}" aria-label="Remove end date">×</a></span>{% endif %}
+      {% if f.transcript %}<span class="chip">{{ TRANSCRIPT_FILTERS[f.transcript] }} <a href="{{ qs(qbase, transcript=None, page=None) }}" aria-label="Remove transcript filter">×</a></span>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    {% if meetings %}
+    <form method="post" action="/meetings/bulk" data-busy-form>
+      <div class="card" data-bulk hidden>
+        <div class="card-pad row-between">
+          <span>Selected: <strong data-bulk-count>0</strong></span>
+          <div class="row">
+            <button class="btn btn-sm" name="kind" value="process" data-busy-label="Queueing…">Download and transcribe</button>
+            <button class="btn btn-line btn-sm" name="kind" value="fetch_assets" data-busy-label="Queueing…">Download only</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card table-wrap" style="margin-top:var(--s3)">
+        <table class="t-fixed">
+          <caption class="visually-hidden">List of meetings</caption>
+          <thead>
+            <tr>
+              {# Szerokości kolumn ustawione wprost: bez nich tytuł spotkania
+                 dostaje najmniej miejsca i łamie się na trzy linie. #}
+              <th style="width:34px"><input type="checkbox" data-check-all aria-label="Select all meetings"></th>
+              {% set s = f.sort %}
+              <th style="width:24%" aria-sort="{{ 'ascending' if s == 'title_asc' else 'descending' if s == 'title_desc' else 'none' }}">
+                <a class="th-sort {{ 'is-active' if s in ('title_asc', 'title_desc') }}"
+                   href="{{ qs(qbase, sort=next_sort('title', s), page=None) }}">Meeting{% if s == 'title_asc' %}<span class="th-sort-ind" aria-hidden="true">↑</span>{% elif s == 'title_desc' %}<span class="th-sort-ind" aria-hidden="true">↓</span>{% endif %}</a>
+              </th>
+              <th class="nowrap" style="width:124px" aria-sort="{{ 'descending' if s == 'date_desc' else 'ascending' if s == 'date_asc' else 'none' }}">
+                <a class="th-sort {{ 'is-active' if s in ('date_desc', 'date_asc') }}"
+                   href="{{ qs(qbase, sort=next_sort('date', s), page=None) }}">When{% if s == 'date_asc' %}<span class="th-sort-ind" aria-hidden="true">↑</span>{% elif s == 'date_desc' %}<span class="th-sort-ind" aria-hidden="true">↓</span>{% endif %}</a>
+              </th>
+              <th class="nowrap" style="width:74px" aria-sort="{{ 'descending' if s == 'duration_desc' else 'ascending' if s == 'duration_asc' else 'none' }}">
+                <a class="th-sort {{ 'is-active' if s in ('duration_desc', 'duration_asc') }}"
+                   href="{{ qs(qbase, sort=next_sort('duration', s), page=None) }}">Length{% if s == 'duration_asc' %}<span class="th-sort-ind" aria-hidden="true">↑</span>{% elif s == 'duration_desc' %}<span class="th-sort-ind" aria-hidden="true">↓</span>{% endif %}</a>
+              </th>
+              <th style="width:30%">Participants</th>
+              <th style="width:118px" aria-sort="{{ 'ascending' if s == 'status_asc' else 'descending' if s == 'status_desc' else 'none' }}">
+                <a class="th-sort {{ 'is-active' if s in ('status_asc', 'status_desc') }}"
+                   href="{{ qs(qbase, sort=next_sort('status', s), page=None) }}">Status{% if s == 'status_asc' %}<span class="th-sort-ind" aria-hidden="true">↑</span>{% elif s == 'status_desc' %}<span class="th-sort-ind" aria-hidden="true">↓</span>{% endif %}</a>
+              </th>
+              <th style="width:136px" aria-sort="{{ 'ascending' if s == 'transcript_asc' else 'descending' if s == 'transcript_desc' else 'none' }}">
+                <a class="th-sort {{ 'is-active' if s in ('transcript_asc', 'transcript_desc') }}"
+                   href="{{ qs(qbase, sort=next_sort('transcript', s), page=None) }}">Transcript{% if s == 'transcript_asc' %}<span class="th-sort-ind" aria-hidden="true">↑</span>{% elif s == 'transcript_desc' %}<span class="th-sort-ind" aria-hidden="true">↓</span>{% endif %}</a>
+              </th>
+              <th style="width:110px"><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for m in meetings %}
+            {% set job = active_jobs.get(m.id) %}
+            <tr {% if job %}data-job-id="{{ job.id }}" data-job-active{% endif %}>
+              <td data-label=""><input type="checkbox" name="meeting_ids" value="{{ m.id }}" aria-label="Select: {{ m.title }}"></td>
+              <td data-label="Meeting">
+                <div>
+                  <a class="t-title" href="/meetings/{{ m.id }}">{{ m.title }}</a>
+                  <div class="t-sub">
+                    {{ m.platform | platform }}
+                    {%- if m.title_source == 'calendar' %} · title from calendar{% endif %}
+                  </div>
+                </div>
+              </td>
+              <td data-label="When" class="nowrap t-sub">{{ m.occurred_at | dt }}</td>
+              <td data-label="Length" class="nowrap t-sub num">{{ m.duration_seconds | dur }}</td>
+              <td data-label="Participants">
+                <div class="people">
+                  {% for p in m.human_participants[:5] %}
+                    <span class="person {{ 'host' if p.is_host }} {{ 'invited' if p.source == 'calendar' }}"
+                          title="{{ p.email or p.display }}{{ ' · invited only' if p.source == 'calendar' }}">{{ p.display }}</span>
+                  {% endfor %}
+                  {% if m.human_participants | length > 5 %}
+                    <span class="person" title="Full list in the meeting details">+{{ m.human_participants | length - 5 }}</span>
+                  {% endif %}
+                  {% if not m.human_participants %}<span class="muted small">—</span>{% endif %}
+                </div>
+              </td>
+              <td data-label="Status">
+                <div>
+                  {{ ui.meeting_badge(m) }}
+                  {% if m.media_expires_at and m.asset_state != 'ready' and m.status_group == 'done' %}
+                    <div class="t-sub">audio until {{ m.media_expires_at | dt('%m-%d, %H:%M') }}</div>
+                  {% endif %}
+                </div>
+              </td>
+              <td data-label="Transcript">
+                <div>
+                {% if job %}
+                  {{ ui.progress(job) }}
+                {% elif m.transcript_state == 'ready' and m.latest_transcript %}
+                  <a class="badge b-ready" href="/transcripts/{{ m.latest_transcript.id }}">Ready</a>
+                  <div class="t-sub num">{{ m.latest_transcript.utterance_count }} utterances</div>
+                {% else %}
+                  <span class="badge b-{{ m.transcript_state }}">{{ m.transcript_state | tstate }}</span>
+                {% endif %}
+                </div>
+              </td>
+              <td data-label="" class="nowrap">
+                {% if m.recording_id and not job and m.transcript_state != 'ready' %}
+                  <button class="btn btn-sm" formaction="/meetings/{{ m.id }}/enqueue" name="kind" value="process"
+                          data-busy-label="Queueing…">Process</button>
+                {% elif m.latest_transcript %}
+                  <a class="btn btn-line btn-sm" href="/transcripts/{{ m.latest_transcript.id }}">Open</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </form>
+
+    {{ ui.pager(f.page, pages, qbase) }}
+
+    {% elif f.is_active() %}
+      {% call ui.empty(ui.art_meetings(), 'Nothing matches the filters',
+                       'Try widening the date range or unchecking some people.') %}
+        <a class="btn btn-primary" href="/meetings">Clear filters</a>
+      {% endcall %}
+    {% else %}
+      {% call ui.empty(ui.art_meetings(), 'No meetings yet',
+                       'Pull the bots from Recall.ai — we will fetch statuses, durations and participants.') %}
+        <form method="post" action="/sync" data-busy-form>
+          <button class="btn btn-primary" data-busy-label="Syncing…">Sync with Recall.ai</button>
+        </form>
+      {% endcall %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
