@@ -250,8 +250,8 @@ def _do_pipeline(ctx: JobContext, meeting: Meeting, force_asr: bool = False) -> 
         recording_id=meeting.recording_id,
         engine="pipeline-recall",
         language=lang,
-        text_path=str(txt_path),
-        raw_path=str(raw_path),
+        text_path=str(txt_path.relative_to(settings.transcripts_dir)),
+        raw_path=str(raw_path.relative_to(settings.transcripts_dir)),
         speakers=[{"name": s, "seconds": round(talk_time.get(s, 0.0), 1)} for s in speakers],
         utterance_count=len(utts),
         word_count=sum(len(u.text.split()) for u in utts),
@@ -534,8 +534,13 @@ def parse_transcript(text: str) -> list[dict[str, Any]]:
     return out
 
 
+def transcript_file_path(value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else settings.transcripts_dir / path
+
+
 def transcript_text(transcript: Transcript) -> str:
-    path = Path(transcript.text_path)
+    path = transcript_file_path(transcript.text_path)
     if not path.exists():
         raise FileNotFoundError(f"the transcript file is gone: {path}")
     return path.read_text(encoding="utf-8")

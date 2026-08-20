@@ -590,9 +590,12 @@ def transcript_download(
         }, ensure_ascii=False, indent=2)
         media, ext = "application/json; charset=utf-8", "json"
     elif fmt == "raw":
-        if not t.raw_path or not Path(t.raw_path).exists():
+        if not t.raw_path:
             raise HTTPException(404, "No raw ASR response")
-        body = Path(t.raw_path).read_text(encoding="utf-8")
+        raw_path = tasks.transcript_file_path(t.raw_path)
+        if not raw_path.exists():
+            raise HTTPException(404, "No raw ASR response")
+        body = raw_path.read_text(encoding="utf-8")
         media, ext = "application/json; charset=utf-8", "raw.json"
     else:
         raise HTTPException(400, "Unknown format (txt|md|vtt|json|raw)")

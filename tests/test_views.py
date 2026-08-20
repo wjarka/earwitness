@@ -13,7 +13,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from webapp import labels
+from webapp import tasks
 from webapp.app import app
+from webapp.config import settings
 from webapp.models import Job, Meeting, Transcript
 
 HTML = {"accept": "text/html,application/xhtml+xml"}
@@ -212,6 +214,16 @@ def test_transcript_offers_every_export_format(client, session, meeting, tmp_pat
     # Widok listy nie oferuje surowego ASR — to narzędzie debugowe.
     r = client.get("/transcripts", headers=HTML)
     assert "fmt=raw" not in r.text
+
+
+def test_transcript_text_resolves_relative_path(meeting):
+    path = settings.transcripts_dir / meeting.id / "t.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("Jan Kowalski [00:00:01] Cześć.\n", encoding="utf-8")
+
+    t = Transcript(meeting_id=meeting.id, text_path=f"{meeting.id}/t.txt")
+
+    assert tasks.transcript_text(t) == "Jan Kowalski [00:00:01] Cześć.\n"
 
 
 def test_running_transcription_shows_skeleton_not_blank(client, session, meeting):
