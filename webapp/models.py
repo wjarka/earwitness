@@ -101,17 +101,8 @@ class User(Base):
 # Spotkania
 # --------------------------------------------------------------------------
 
-# Kanoniczne grupy statusów do filtrowania w UI. Recall ma kilkanaście kodów;
-# użytkownika interesuje głównie: czeka / trwa / gotowe / nie wyszło.
-STATUS_GROUPS: dict[str, str] = {
-    "scheduled": "Scheduled",
-    "joining": "Joining",
-    "recording": "Recording",
-    "done": "Finished",
-    "failed": "Failed",
-    "expired": "Media expired",
-}
-
+# Wewnętrzne grupy statusów bota z Recall (kilkanacie kodów → 6 grup).
+# Nie są już osią UI — status dla człowieka wyprowadza `Meeting.user_status`.
 _RAW_TO_GROUP = {
     "ready": "scheduled",
     "scheduled": "scheduled",
