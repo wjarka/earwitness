@@ -136,6 +136,44 @@ def test_status_hint_explains_recall_sub_codes():
 # Akcje na spotkaniu: jedna intencja = jeden przycisk
 # --------------------------------------------------------------------------
 
+def _seed_axis(session):
+    when = dt.datetime(2026, 8, 1, 10, 0, tzinfo=dt.timezone.utc)
+    session.add(Meeting(id="bot-up", title="Planned", status_group="scheduled",
+                        transcript_state="none", asset_state="none", started_at=when))
+    session.add(Meeting(id="bot-none", title="Empty", status_group="done",
+                        transcript_state="none", asset_state="none", started_at=when))
+    session.add(Meeting(id="bot-ok", title="Done deal", status_group="done",
+                        transcript_state="ready", asset_state="ready", started_at=when))
+    session.commit()
+
+
+def test_meetings_default_to_finished_view(client, session):
+    _seed_axis(session)
+    html = client.get("/meetings", headers=HTML).text
+    assert "Empty" in html and "Done deal" in html
+    assert "Planned" not in html
+    assert "finished" in html.lower()  # podtytuł „N finished meetings”
+
+
+def test_meetings_all_view_shows_everything(client, session):
+    _seed_axis(session)
+    html = client.get("/meetings?view=all", headers=HTML).text
+    assert "Planned" in html
+
+
+def test_status_deep_link_still_filters(client, session):
+    _seed_axis(session)
+    html = client.get("/meetings?status=ready", headers=HTML).text
+    assert "Done deal" in html and "Empty" not in html
+
+
+def test_api_exposes_user_status_and_defaults_to_all(client, session, meeting):
+    data = client.get("/api/meetings").json()
+    item = data["items"][0]
+    assert item["user_status"] == "to_process"
+    assert item["status"] == "done" and item["transcript_state"] == "none"
+
+
 def test_meeting_without_transcript_offers_one_action(client, session, meeting):
     r = client.get(f"/meetings/{meeting.id}", headers=HTML)
     assert "Get transcript" in r.text
