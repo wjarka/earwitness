@@ -47,7 +47,6 @@ from webapp.jobs import enqueue, queue_stats
 from webapp.models import (
     ACTIVE_JOB_STATES,
     DEFAULT_VIEW_STATUSES,
-    STATUS_GROUPS,
     USER_STATUS_ORDER,
     Job,
     Meeting,
@@ -135,7 +134,6 @@ templates.env.filters["jobstatus"] = labels.job_status
 templates.env.filters["assetstate"] = labels.asset_state
 templates.env.filters["tstate"] = labels.transcript_state
 templates.env.filters["platform"] = labels.platform
-templates.env.globals["STATUS_GROUPS"] = STATUS_GROUPS
 templates.env.globals["JOB_STATUSES"] = labels.JOB_STATUSES
 templates.env.globals["SORTS"] = SORTS
 templates.env.globals["status_hint"] = labels.status_hint

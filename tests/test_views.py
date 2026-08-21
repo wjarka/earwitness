@@ -174,6 +174,35 @@ def test_api_exposes_user_status_and_defaults_to_all(client, session, meeting):
     assert item["status"] == "done" and item["transcript_state"] == "none"
 
 
+def test_sidebar_uses_single_status_axis(client, session, meeting):
+    html = client.get("/meetings", headers=HTML).text
+    for label in ("Upcoming", "In meeting", "Processing", "To process", "No recording"):
+        assert f">{label}</span>" in html
+    assert 'name="transcript"' not in html
+
+
+def test_view_toggle_switches_between_finished_and_all(client, session, meeting):
+    html = client.get("/meetings", headers=HTML).text
+    assert "Show all meetings" in html
+    assert "finished meeting" in html  # podtytuł liczby
+    html = client.get("/meetings?view=all", headers=HTML).text
+    assert "Show finished only" in html
+
+
+def test_finished_empty_state_explains_itself(client, session):
+    session.add(Meeting(id="bot-up", title="Planned", status_group="scheduled",
+                        transcript_state="none", asset_state="none"))
+    session.commit()
+    html = client.get("/meetings", headers=HTML).text
+    assert "No finished meetings yet" in html
+    assert "Show all meetings" in html
+
+
+def test_transcripts_empty_state_links_to_to_process(client, session):
+    html = client.get("/transcripts", headers=HTML).text
+    assert 'href="/meetings?status=to_process"' in html
+
+
 def test_meeting_without_transcript_offers_one_action(client, session, meeting):
     r = client.get(f"/meetings/{meeting.id}", headers=HTML)
     assert "Get transcript" in r.text
