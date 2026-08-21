@@ -108,6 +108,19 @@ def test_status_labels_cover_every_state():
     assert set(TRANSCRIPT_STATES) <= set(labels.TRANSCRIPT_STATES)
 
 
+def test_user_status_labels_cover_every_state():
+    from webapp.models import USER_STATUS_ORDER
+
+    assert set(USER_STATUS_ORDER) == set(labels.USER_STATUSES)
+
+
+def test_meeting_badge_shows_user_status_with_recall_tooltip(client, session, meeting):
+    r = client.get(f"/meetings/{meeting.id}", headers=HTML)
+    assert 'class="badge b-to_process"' in r.text
+    assert "To process" in r.text
+    assert "Recall: done" in r.text
+
+
 def test_unknown_code_degrades_gracefully():
     assert labels.job_kind("nowy_typ_zadania") == "Nowy typ zadania"
     assert labels.job_status(None) == "—"

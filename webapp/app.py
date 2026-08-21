@@ -46,7 +46,9 @@ from webapp.jobs import cancel as cancel_job
 from webapp.jobs import enqueue, queue_stats
 from webapp.models import (
     ACTIVE_JOB_STATES,
+    DEFAULT_VIEW_STATUSES,
     STATUS_GROUPS,
+    USER_STATUS_ORDER,
     Job,
     Meeting,
     Transcript,
@@ -139,6 +141,8 @@ templates.env.globals["JOB_STATUSES"] = labels.JOB_STATUSES
 templates.env.globals["SORTS"] = SORTS
 templates.env.globals["TRANSCRIPT_FILTERS"] = TRANSCRIPT_FILTERS
 templates.env.globals["status_hint"] = labels.status_hint
+templates.env.globals["USER_STATUSES"] = labels.USER_STATUSES
+templates.env.globals["USER_STATUS_ORDER"] = USER_STATUS_ORDER
 
 
 def qs(base: dict[str, Any], **overrides: Any) -> str:
