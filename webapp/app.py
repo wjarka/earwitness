@@ -32,7 +32,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from webapp import labels, tasks
-from webapp.app_settings import get_autoprocess, set_autoprocess
+from webapp.app_settings import get_autoprocess, save_autoprocess
 from webapp.auth import (
     DomainNotAllowed,
     OAuthError,
@@ -798,8 +798,7 @@ def trigger_sync(
     session: Session = Depends(get_session),
     user: User = Depends(require_user),
 ):
-    set_autoprocess(session, bool(autoprocess))
-    session.commit()
+    save_autoprocess(session, bool(autoprocess))
     job = enqueue(
         session,
         "sync_recall",

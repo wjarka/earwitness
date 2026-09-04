@@ -101,6 +101,23 @@ def test_checking_survives_when_manual_sync_is_already_running(client, session):
     assert "checked" in _autoprocess_input(page.text)
 
 
+def test_conflicting_first_insert_still_saves(session):
+    from webapp.app_settings import get_autoprocess, save_autoprocess, set_autoprocess
+    from webapp.db import SessionLocal
+
+    first = SessionLocal()
+    second = SessionLocal()
+    try:
+        set_autoprocess(first, True)
+        set_autoprocess(second, False)
+        first.commit()
+        save_autoprocess(second, False)
+        assert get_autoprocess(session) is False
+    finally:
+        first.close()
+        second.close()
+
+
 def _process_jobs(session) -> list[Job]:
     return list(session.execute(select(Job).where(Job.kind == "process")).scalars())
 
