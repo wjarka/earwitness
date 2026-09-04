@@ -84,9 +84,7 @@ def test_unchecking_process_automatically_stays_off_after_refresh(client: TestCl
 
 
 def _process_jobs(session) -> list[Job]:
-    return list(
-        session.execute(select(Job).where(Job.kind == "process")).scalars()
-    )
+    return list(session.execute(select(Job).where(Job.kind == "process")).scalars())
 
 
 def test_sync_queues_ready_meetings_when_autoprocess_is_on(
