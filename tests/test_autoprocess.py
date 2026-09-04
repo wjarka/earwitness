@@ -83,6 +83,24 @@ def test_unchecking_process_automatically_stays_off_after_refresh(client: TestCl
     assert "checked" not in _autoprocess_input(page.text)
 
 
+def test_checking_survives_when_manual_sync_is_already_running(client, session):
+    from webapp import jobs as J
+
+    job = J.enqueue(session, "sync_recall", dedupe_key="sync_recall:manual")
+    claimed = J.claim(session, "w1")
+    assert claimed is not None and claimed.id == job.id
+
+    posted = client.post(
+        "/sync",
+        data={"autoprocess": "true", "with_calendar": "true"},
+        follow_redirects=False,
+    )
+    assert posted.status_code == 303
+
+    page = client.get("/meetings", headers=HTML)
+    assert "checked" in _autoprocess_input(page.text)
+
+
 def _process_jobs(session) -> list[Job]:
     return list(session.execute(select(Job).where(Job.kind == "process")).scalars())
 

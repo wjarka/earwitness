@@ -799,6 +799,7 @@ def trigger_sync(
     user: User = Depends(require_user),
 ):
     set_autoprocess(session, bool(autoprocess))
+    session.commit()
     job = enqueue(
         session,
         "sync_recall",
