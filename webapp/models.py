@@ -98,6 +98,18 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class CalendarIdentity(Base):
+    """Stable local ownership of one Recall Calendar V1 identity."""
+
+    __tablename__ = "calendar_identities"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    external_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, default=utcnow)
+
+
 # --------------------------------------------------------------------------
 # Spotkania
 # --------------------------------------------------------------------------
