@@ -176,3 +176,56 @@ def test_manual_sync_with_checkbox_on_still_queues(client, session, monkeypatch)
 
     assert result.get("queued") == 1
     assert [j.meeting_id for j in _process_jobs(session)] == ["bot-ready"]
+
+
+def _sync_jobs(session) -> list[Job]:
+    return list(session.execute(select(Job).where(Job.kind == "sync_recall")).scalars())
+
+
+def test_checking_via_toggle_persists_without_sync(client, session):
+    posted = client.post(
+        "/api/settings/autoprocess",
+        data={"autoprocess": "true"},
+    )
+    assert posted.status_code == 200
+    assert posted.json() == {"autoprocess": True}
+    assert _sync_jobs(session) == []
+
+    page = client.get("/meetings", headers=HTML)
+    assert page.status_code == 200
+    assert "checked" in _autoprocess_input(page.text)
+
+
+def test_unchecking_via_toggle_persists_without_sync(client, session):
+    client.post("/api/settings/autoprocess", data={"autoprocess": "true"})
+    posted = client.post("/api/settings/autoprocess", data={})
+    assert posted.status_code == 200
+    assert posted.json() == {"autoprocess": False}
+    assert _sync_jobs(session) == []
+
+    page = client.get("/meetings", headers=HTML)
+    assert page.status_code == 200
+    assert "checked" not in _autoprocess_input(page.text)
+
+
+def test_autosync_queues_after_toggle_on(client, session, monkeypatch):
+    monkeypatch.setattr(settings, "autoprocess", False)
+    _ready_meeting(session)
+    client.post("/api/settings/autoprocess", data={"autoprocess": "true"})
+
+    result = _run_sync(session, monkeypatch)
+
+    assert result.get("queued") == 1
+    assert [j.meeting_id for j in _process_jobs(session)] == ["bot-ready"]
+
+
+def test_autosync_does_not_queue_after_toggle_off(client, session, monkeypatch):
+    monkeypatch.setattr(settings, "autoprocess", True)
+    _ready_meeting(session)
+    client.post("/api/settings/autoprocess", data={"autoprocess": "true"})
+    client.post("/api/settings/autoprocess", data={})
+
+    result = _run_sync(session, monkeypatch)
+
+    assert result.get("queued") in (None, 0)
+    assert _process_jobs(session) == []
