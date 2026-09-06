@@ -110,6 +110,30 @@ class CalendarIdentity(Base):
     created_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
+class CalendarOAuthAttempt(Base):
+    """Short-lived, session-bound state for the Calendar OAuth handoff."""
+
+    __tablename__ = "calendar_oauth_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    state_digest: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False
+    )
+    session_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    return_nonce_digest: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False
+    )
+    requested_mode: Mapped[Optional[str]] = mapped_column(String(16))
+    created_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, default=utcnow)
+    expires_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False)
+    bridge_consumed_at: Mapped[Optional[dt.datetime]] = mapped_column(UtcDateTime)
+    return_consumed_at: Mapped[Optional[dt.datetime]] = mapped_column(UtcDateTime)
+    confirmed_at: Mapped[Optional[dt.datetime]] = mapped_column(UtcDateTime)
+
+
 # --------------------------------------------------------------------------
 # Spotkania
 # --------------------------------------------------------------------------
