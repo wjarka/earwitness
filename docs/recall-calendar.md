@@ -120,10 +120,24 @@ the existing sync. Also verify the owner's adopted schedule and two connected
 users sharing a meeting. Store no event titles, participant information, bot IDs
 or recordings in the repository or public comments.
 
-At implementation start, no live deployment/account was available and no live
-meeting test had run. Automated and browser checks use synthetic data and do
-not establish that a real bot joins or records. Record actual verification
-results in the PR and keep any unverified live acceptance criteria open.
+Verification on 2026-09-06:
+
+- `uv run ruff check .`: passed.
+- `uv run ruff format --check .`: 52 files formatted.
+- `uv run pytest -q`: 308 passed; one pre-existing TestClient deprecation warning.
+- Chromium with synthetic Recall responses: all four modes saved and survived
+  reload; Custom rules remained identifiable; an upstream outage retained the
+  unsaved choice and offered Retry without claiming disconnection.
+- Light/night layouts at 360×640 and 1280×900: no horizontal overflow, visible
+  keyboard focus, primary controls at least 44px high. Empty and expired-access
+  states were inspected at 360×640. With reduced motion, submit showed
+  `Saving…` and `aria-busy=true`; the button stayed 286×44px.
+- A forged non-ASCII CSRF value was safely rejected on all three mutation routes.
+
+No live deployment/account was available, so actual Google consent, bot admission
+and recording import, the owner's live mapping, and shared-meeting deduplication
+remain **unverified**. Automated and browser checks use synthetic data and do not
+establish that a real bot joins or records. Keep these acceptance criteria open.
 
 ## Official contracts
 

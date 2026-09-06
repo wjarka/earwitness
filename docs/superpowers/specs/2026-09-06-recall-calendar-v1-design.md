@@ -14,6 +14,8 @@ unique Recall external identity. Creating a new table lets `init_db()` upgrade
 existing databases without changing existing user columns. Allocate and commit
 one random identity before issuing a Recall token; concurrent attempts resolve
 to the persisted winner. Retain the mapping after disconnect and across logins.
+Persist unfinished setup and its selected mode on that identity independently
+of expiring OAuth attempts, so cleanup cannot turn a first-setup retry into a reconnect.
 Store expiring OAuth attempts separately with `UtcDateTime` timestamps and
 atomic consumption. Browser inputs never select a Recall identity.
 

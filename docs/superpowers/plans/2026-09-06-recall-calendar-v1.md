@@ -26,16 +26,16 @@
 
 **Interfaces:** `CalendarClient(external_id: str)` context manager exposes `authenticate() -> str`, `get_user() -> dict`, `set_mode(mode: str) -> dict`, `disconnect() -> dict`, `meetings() -> list[dict]`. `CalendarError` contains safe human-facing copy. `recording_mode(preferences: dict) -> str` returns off/external/internal/all/custom. `ensure_identity(session, user) -> CalendarIdentity` persists a unique external_id before API auth. `find_identity(session, user)` performs no creation.
 
-- [ ] Write tests using httpx MockTransport against the real client: literal six-flag payloads, Custom detection, preservation of bot_name, same-identity token refresh, timeout/rate-limit safe errors, list and paginated meeting responses, rejection of foreign pagination URLs. Example observable assertion:
+- [x] Write tests using httpx MockTransport against the real client: literal six-flag payloads, Custom detection, preservation of bot_name, same-identity token refresh, timeout/rate-limit safe errors, list and paginated meeting responses, rejection of foreign pagination URLs. Example observable assertion:
   ```python
   assert recording_mode({'record_external': True, 'record_internal': False,
                          'record_non_host': False, 'record_recurring': False,
                          'record_confirmed': False, 'record_only_host': False}) == 'external'
   ```
-- [ ] Add identity reuse, distinct users, unique external identity, and existing-database initialization tests; run `uv run pytest tests/test_recall_calendar.py -q` and observe missing behavior.
-- [ ] Implement client using regional `RecallConfig`; workspace Token header only for authenticate/list users, per-user header elsewhere. PUT only documented preference flags; read back preferences. HTTP failures never expose response text. Meetings use start_time_after/before and same-origin/path pagination with a bounded page count.
-- [ ] Add CalendarIdentity table keyed by User.id with unique external_id; insert in a nested transaction, resolve concurrent unique conflict to persisted winner. Refuse automatic new identities if workspace email lookup finds an existing Google connection; require operator adoption.
-- [ ] Run focused tests and ruff, inspect diff, commit task.
+- [x] Add identity reuse, distinct users, unique external identity, and existing-database initialization tests; run `uv run pytest tests/test_recall_calendar.py -q` and observe missing behavior.
+- [x] Implement client using regional `RecallConfig`; workspace Token header only for authenticate/list users, per-user header elsewhere. PUT only documented preference flags; read back preferences. HTTP failures never expose response text. Meetings use start_time_after/before and same-origin/path pagination with a bounded page count.
+- [x] Add CalendarIdentity table keyed by User.id with unique external_id; insert in a nested transaction, resolve concurrent unique conflict to persisted winner. Refuse automatic new identities if workspace email lookup finds an existing Google connection; require operator adoption.
+- [x] Run focused tests and ruff, inspect diff, commit task.
 
 ## Task 2: OAuth, management UI and ownership adoption
 
@@ -43,21 +43,21 @@
 
 **Consumes:** Task 1 interfaces. **Produces:** `/calendar`, POST `/calendar/connect`, `/calendar/preferences`, `/calendar/disconnect`, GET `/calendar/oauth/callback`, `/calendar/oauth/return`, and `uv run python -m webapp.calendar_admin adopt --user-email EMAIL --external-id ID`.
 
-- [ ] Add route tests through TestClient with real DB and mocked upstream transport. Unconfigured page renders setup recovery; anonymous management cannot proceed. Extract CSRF token from returned form, submit mode, inspect authorization URL, simulate bridge and return. Assert forged state, wrong session, expired/replayed attempts never redirect to Recall. Test selected mode survives failure, preferences persist on reload, Custom preserved on reconnect, disconnect preserves local user/history.
-- [ ] Run `uv run pytest tests/test_calendar_routes.py -q` to observe missing routes.
-- [ ] Add expiring CalendarOAuthAttempt table storing hashed state and session binding, return nonce, bridge/return consumption, and requested mode. Use conditional UPDATE for consumption and invalidate older attempts on new initiation/disconnect. Use configured BASE_URL and regional callback only. Exact OAuth state goes to Google; no workspace key does. Final return re-reads connection, then verifies requested preferences for new setup.
-- [ ] Implement CSRF-protected forms and safe error redirects. Configuration adds RECALL_GOOGLE_CLIENT_ID. New identities require explicit mode; existing connected users keep preferences on reconnect. Do not initialize identities on GET. OAuth routes still require app session. Add callback log redaction and no-store/no-referrer responses.
-- [ ] Render connection, four-choice fieldset, and upcoming event list using existing macros/tokens. Show bot status from bot_id; explain overrides, domain comparison, syncing and eligible meetings. Preserve shell during fetch/form actions with aria-busy feedback and reduced motion. Add navigation link and first-login redirect to calendar page, preserving existing login intent where applicable.
-- [ ] Implement operator adoption via workspace user lookup before any token minting; verify exact external_id and Google email against active local user, reject conflicts or already-issued new identity. Test mismatch and repeated adoption. No browser adoption endpoint.
-- [ ] Run focused route/admin tests and ruff, inspect diff, commit task.
+- [x] Add route tests through TestClient with real DB and mocked upstream transport. Unconfigured page renders setup recovery; anonymous management cannot proceed. Extract CSRF token from returned form, submit mode, inspect authorization URL, simulate bridge and return. Assert forged state, wrong session, expired/replayed attempts never redirect to Recall. Test selected mode survives failure, preferences persist on reload, Custom preserved on reconnect, disconnect preserves local user/history.
+- [x] Run `uv run pytest tests/test_calendar_routes.py -q` to observe missing routes.
+- [x] Add expiring CalendarOAuthAttempt table storing hashed state and session binding, return nonce, bridge/return consumption, and requested mode. Use conditional UPDATE for consumption and invalidate older attempts on new initiation/disconnect. Use configured BASE_URL and regional callback only. Exact OAuth state goes to Google; no workspace key does. Final return re-reads connection, then verifies requested preferences for new setup.
+- [x] Implement CSRF-protected forms and safe error redirects. Configuration adds RECALL_GOOGLE_CLIENT_ID. New identities require explicit mode; existing connected users keep preferences on reconnect. Do not initialize identities on GET. OAuth routes still require app session. Add callback log redaction and no-store/no-referrer responses.
+- [x] Render connection, four-choice fieldset, and upcoming event list using existing macros/tokens. Show bot status from bot_id; explain overrides, domain comparison, syncing and eligible meetings. Preserve shell during fetch/form actions with aria-busy feedback and reduced motion. Add navigation link and first-login redirect to calendar page, preserving existing login intent where applicable.
+- [x] Implement operator adoption via workspace user lookup before any token minting; verify exact external_id and Google email against active local user, reject conflicts or already-issued new identity. Test mismatch and repeated adoption. No browser adoption endpoint.
+- [x] Run focused route/admin tests and ruff, inspect diff, commit task.
 
 ## Task 3: Integration, deployment and verification
 
 **Files:** create `docs/recall-calendar.md`; modify README and applicable env example; amend implementation/tests only for verified defects.
 
-- [ ] Document regional workspace Google OAuth credentials, app callback and scope configuration, consent testing restrictions, stable identity adoption, controlled fallback, log redaction and four modes.
-- [ ] Run all three bound checks; fix failures based on evidence.
-- [ ] Launch local app with synthetic Recall fixtures; inspect desktop and 360×640 light/night layouts, keyboard focus, hit targets, reduced motion and loading/error states. Record actual observations.
+- [x] Document regional workspace Google OAuth credentials, app callback and scope configuration, consent testing restrictions, stable identity adoption, controlled fallback, log redaction and four modes.
+- [x] Run all three bound checks; fix failures based on evidence.
+- [x] Launch local app with synthetic Recall fixtures; inspect desktop and 360×640 light/night layouts, keyboard focus, hit targets, reduced motion and loading/error states. Record actual observations.
 - [ ] Run permitted live account/meeting acceptance if credentials and browser session are available; otherwise explicitly record the missing evidence and leave the issue open. Do not claim mocked scheduling demonstrates an actual bot joining.
-- [ ] Request code review of the complete diff; address correctness/security findings and repeat covering checks.
+- [x] Request code review of the complete diff; address correctness/security findings and repeat covering checks.
 - [ ] Commit, push branch, open draft PR with repository template and required dev-flow fields, move board to In review, monitor CI/review using pr-checks. Keep draft and report any live acceptance blocker.
