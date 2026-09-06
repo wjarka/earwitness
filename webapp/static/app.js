@@ -83,8 +83,8 @@
   document.querySelectorAll("[data-autoprocess]").forEach((box) => {
     box.addEventListener("change", async () => {
       const previous = !box.checked;
-      box.disabled = true;
       box.removeAttribute("aria-invalid");
+      box.setAttribute("aria-busy", "true");
       try {
         const body = new URLSearchParams();
         if (box.checked) body.set("autoprocess", "true");
@@ -101,7 +101,7 @@
         box.checked = previous;
         box.setAttribute("aria-invalid", "true");
       } finally {
-        box.disabled = false;
+        box.removeAttribute("aria-busy");
       }
     });
   });
