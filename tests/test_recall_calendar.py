@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
-from sqlalchemy import create_engine, inspect, select
+from sqlalchemy import create_engine, event, inspect, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from transcripts.recall_client import RecallConfig
+from webapp import calendar_identity
 from webapp.calendar_identity import (
     CalendarIdentityAdoptionRequired,
     ensure_identity,
@@ -192,6 +195,32 @@ def test_expired_token_is_refreshed_once_for_the_same_identity(
     assert auth_bodies == [b'{"user_id":"stable-id"}', b'{"user_id":"stable-id"}']
 
 
+def test_repeated_unauthorized_response_refreshes_only_once(
+    recall_config: RecallConfig,
+) -> None:
+    authentication_count = 0
+    user_request_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal authentication_count, user_request_count
+        if request.url.path.endswith("/authenticate/"):
+            authentication_count += 1
+            return httpx.Response(200, json={"token": f"token-{authentication_count}"})
+        user_request_count += 1
+        return httpx.Response(401, json={"detail": "still expired"})
+
+    with CalendarClient(
+        "stable-id",
+        config=recall_config,
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(CalendarError, match="authorization expired"):
+            client.get_user()
+
+    assert authentication_count == 2
+    assert user_request_count == 2
+
+
 @pytest.mark.parametrize("status_code", [401, 429, 500])
 def test_http_failures_do_not_expose_response_text(
     recall_config: RecallConfig, status_code: int
@@ -299,6 +328,61 @@ def test_meetings_follows_same_endpoint_pagination(recall_config: RecallConfig) 
         assert client.meetings() == [first, second]
 
 
+def test_meetings_resolves_query_relative_pagination_against_collection(
+    recall_config: RecallConfig,
+) -> None:
+    first = calendar_meeting("1ca37fc9-77ac-4f44-9278-45f95af1268b")
+    second = calendar_meeting("d9007004-b8ac-4609-bb0b-52f083748729")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/authenticate/"):
+            return httpx.Response(200, json={"token": "calendar-token"})
+        if request.url.params.get("cursor") == "next":
+            assert request.url.path == "/api/v1/calendar/meetings/"
+            return httpx.Response(200, json={"results": [second], "next": None})
+        return httpx.Response(
+            200,
+            json={"results": [first], "next": "?cursor=next"},
+        )
+
+    with CalendarClient(
+        "stable-id",
+        config=recall_config,
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        assert client.meetings() == [first, second]
+
+
+def test_meetings_stops_at_page_cap(recall_config: RecallConfig) -> None:
+    meeting_request_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal meeting_request_count
+        if request.url.path.endswith("/authenticate/"):
+            return httpx.Response(200, json={"token": "calendar-token"})
+        meeting_request_count += 1
+        return httpx.Response(
+            200,
+            json={
+                "results": [],
+                "next": (
+                    "https://eu-central-1.recall.ai/api/v1/calendar/meetings/"
+                    f"?cursor={meeting_request_count + 1}"
+                ),
+            },
+        )
+
+    with CalendarClient(
+        "stable-id",
+        config=recall_config,
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(CalendarError, match="pagination"):
+            client.meetings()
+
+    assert meeting_request_count == 100
+
+
 @pytest.mark.parametrize(
     "next_url",
     [
@@ -366,6 +450,57 @@ def test_ensure_identity_reuses_the_committed_mapping(session: Session) -> None:
 
     assert first.external_id == second.external_id
     assert session.get(CalendarIdentity, user.id).external_id == first.external_id
+
+
+def test_competing_identity_creations_return_the_committed_winner(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'identity-race.db'}",
+        connect_args={"check_same_thread": False, "timeout": 10},
+    )
+
+    @event.listens_for(engine, "connect")
+    def set_wal(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=10000")
+        cursor.close()
+
+    Base.metadata.create_all(engine)
+    sessions = sessionmaker(engine, expire_on_commit=False)
+    with sessions() as setup_session:
+        user = make_user("race@example.com", "race-sub")
+        setup_session.add(user)
+        setup_session.commit()
+        user_id = user.id
+
+    allocation_barrier = threading.Barrier(2)
+    real_new_external_id = calendar_identity._new_external_id
+
+    def synchronized_external_id() -> str:
+        value = real_new_external_id()
+        allocation_barrier.wait(timeout=5)
+        return value
+
+    monkeypatch.setattr(calendar_identity, "_new_external_id", synchronized_external_id)
+
+    def allocate() -> str:
+        with sessions() as worker_session:
+            worker_user = worker_session.get(User, user_id)
+            return ensure_identity(
+                worker_session, worker_user, workspace_users=[]
+            ).external_id
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        identities = list(executor.map(lambda _index: allocate(), range(2)))
+
+    with sessions() as verify_session:
+        persisted = verify_session.scalars(select(CalendarIdentity)).all()
+
+    assert identities[0] == identities[1]
+    assert len(persisted) == 1
+    assert persisted[0].external_id == identities[0]
 
 
 def test_ensure_identity_assigns_distinct_users_distinct_ids(session: Session) -> None:

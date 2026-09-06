@@ -330,8 +330,8 @@ class CalendarClient:
 
     def _safe_meeting_page_url(self, candidate: str) -> str:
         base = httpx.URL(self.config.base_url)
-        url = base.join(candidate)
-        expected_path = f"{base.path.rstrip('/')}{_MEETING_PATH}"
+        collection = httpx.URL(f"{self.config.base_url.rstrip('/')}{_MEETING_PATH}")
+        url = collection.join(candidate)
         same_origin = (
             url.scheme == base.scheme
             and url.host == base.host
@@ -339,7 +339,7 @@ class CalendarClient:
         )
         if (
             not same_origin
-            or url.path != expected_path
+            or url.path != collection.path
             or url.username
             or url.password
             or url.fragment
