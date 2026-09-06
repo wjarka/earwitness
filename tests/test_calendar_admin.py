@@ -36,6 +36,7 @@ def test_adoption_verifies_google_email_and_reuses_identity(
     second = adopt_identity(session, owner.email, "dashboard-owner")
     assert first.external_id == second.external_id == "dashboard-owner"
     assert first.user_id == owner.id
+    assert first.setup_pending is False
     assert len(session.scalars(select(CalendarIdentity)).all()) == 1
 
 

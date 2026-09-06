@@ -470,6 +470,45 @@ def test_token_failure_after_identity_creation_still_requires_mode_on_retry(
     assert "Choose a recording option" in rendered.text
 
 
+def test_abandoned_initial_choice_survives_cross_user_attempt_cleanup(
+    client, session, recall
+):
+    from webapp.calendar_routes import _invalidate_pending_attempts
+
+    _begin_oauth(client, "all")
+    attempt_type = getattr(models, "CalendarOAuthAttempt")
+    abandoned = session.scalar(select(attempt_type))
+    abandoned.expires_at = utcnow() - dt.timedelta(seconds=1)
+    other = User(google_sub="other", email="other@example.test", name="Other")
+    session.add(other)
+    session.commit()
+
+    _invalidate_pending_attempts(session, other.id)
+
+    page = client.get("/calendar", headers=HTML)
+    token = _csrf(page.text, "/calendar/connect")
+    retried = client.post(
+        "/calendar/connect",
+        data={"csrf_token": token, "mode": "all"},
+        follow_redirects=False,
+    )
+    assert "accounts.google.com" in retried.headers["location"]
+    retry_state = parse_qs(urlparse(retried.headers["location"]).query)["state"][0]
+    retry_attempt = session.scalar(select(attempt_type))
+    assert retry_attempt.requested_mode == "all"
+
+    assert _bridge(client, retry_state).status_code == 307
+    recall.connected = True
+    state = json.loads(retry_state)
+    completed = client.get(_app_path(state["success_url"]), follow_redirects=False)
+    assert completed.headers["location"] == "/calendar"
+    identity = session.scalar(select(CalendarIdentity))
+    session.refresh(identity)
+    assert identity.setup_pending is False
+    assert recall.preferences["record_external"] is True
+    assert recall.preferences["record_internal"] is True
+
+
 def test_preference_failure_keeps_submitted_choice(client, session, recall):
     user = _dev_user(session)
     ensure_identity(session, user, workspace_users=[])
@@ -565,7 +604,14 @@ def test_bot_schedule_and_manual_override_are_both_visible(client, session, reca
 
 def test_reconnect_preserves_custom_preferences(client, session, recall):
     user = _dev_user(session)
-    ensure_identity(session, user, workspace_users=[])
+    session.add(
+        CalendarIdentity(
+            user_id=user.id,
+            external_id="adopted-external",
+            setup_pending=False,
+        )
+    )
+    session.commit()
     recall.preferences["record_only_host"] = True
     page = client.get("/calendar", headers=HTML)
     token = _csrf(page.text, "/calendar/connect")
@@ -579,6 +625,33 @@ def test_reconnect_preserves_custom_preferences(client, session, recall):
     assert response.status_code == 303
     assert getattr(models, "CalendarOAuthAttempt").__table__ is not None
     attempt = session.scalar(select(getattr(models, "CalendarOAuthAttempt")))
+    assert attempt.requested_mode is None
+    assert recall.preferences["record_only_host"] is True
+
+
+def test_completed_setup_reconnect_preserves_custom_preferences(
+    client, session, recall
+):
+    state_text, state = _begin_oauth(client, "external")
+    assert _bridge(client, state_text).status_code == 307
+    recall.connected = True
+    client.get(_app_path(state["success_url"]), follow_redirects=False)
+    recall.connected = False
+    recall.preferences["record_only_host"] = True
+    page = client.get("/calendar", headers=HTML)
+    token = _csrf(page.text, "/calendar/connect")
+
+    reconnect = client.post(
+        "/calendar/connect",
+        data={"csrf_token": token},
+        follow_redirects=False,
+    )
+
+    assert "accounts.google.com" in reconnect.headers["location"]
+    attempt_type = getattr(models, "CalendarOAuthAttempt")
+    attempt = session.scalar(
+        select(attempt_type).order_by(attempt_type.id.desc()).limit(1)
+    )
     assert attempt.requested_mode is None
     assert recall.preferences["record_only_host"] is True
 
@@ -615,6 +688,32 @@ def test_calendar_page_ignores_forged_success_query(client, recall):
     response = client.get("/calendar?success=Google+Calendar+connected.", headers=HTML)
 
     assert "Google Calendar connected." not in response.text
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "data"),
+    [
+        ("/calendar/connect", {"mode": "all"}),
+        ("/calendar/preferences", {"mode": "all"}),
+        ("/calendar/disconnect", {}),
+    ],
+)
+def test_non_ascii_csrf_is_safely_rejected_for_every_mutation(
+    client, session, recall, endpoint, data
+):
+    client.get("/calendar", headers=HTML)
+
+    response = client.post(
+        endpoint,
+        data={"csrf_token": "zażółć", **data},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/calendar"
+    page = client.get("/calendar", headers=HTML)
+    assert "That form expired" in page.text
+    assert session.scalar(select(CalendarIdentity)) is None
 
 
 def test_oauth_access_log_filter_removes_callback_secrets():

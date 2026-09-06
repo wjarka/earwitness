@@ -107,6 +107,10 @@ class CalendarIdentity(Base):
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     external_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # Newly allocated identities must complete one explicit recording choice.
+    # Operator-adopted identities use the default completed state.
+    setup_pending: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    pending_mode: Mapped[Optional[str]] = mapped_column(String(16))
     created_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
@@ -131,7 +135,6 @@ class CalendarOAuthAttempt(Base):
     expires_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False)
     bridge_consumed_at: Mapped[Optional[dt.datetime]] = mapped_column(UtcDateTime)
     return_consumed_at: Mapped[Optional[dt.datetime]] = mapped_column(UtcDateTime)
-    confirmed_at: Mapped[Optional[dt.datetime]] = mapped_column(UtcDateTime)
 
 
 # --------------------------------------------------------------------------

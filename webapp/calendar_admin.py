@@ -54,7 +54,11 @@ def adopt_identity(
         )
     if existing:
         return existing
-    identity = CalendarIdentity(user_id=user.id, external_id=external_id)
+    identity = CalendarIdentity(
+        user_id=user.id,
+        external_id=external_id,
+        setup_pending=False,
+    )
     try:
         with session.begin_nested():
             session.add(identity)

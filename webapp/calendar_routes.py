@@ -73,7 +73,7 @@ def _valid_csrf(request: Request, supplied: str) -> bool:
     return (
         isinstance(expected, str)
         and isinstance(supplied, str)
-        and hmac.compare_digest(expected, supplied)
+        and hmac.compare_digest(expected.encode(), supplied.encode())
     )
 
 
@@ -129,14 +129,15 @@ def _page_context(
     preferences = user_data.get("preferences") if user_data else {}
     upstream_mode = recording_mode(preferences or {}) if user_data else None
     submitted_mode = request.session.get(_SUBMITTED_MODE_KEY)
-    selected_mode = (
-        submitted_mode if submitted_mode in _SUPPORTED_MODES else upstream_mode
-    )
+    selected_mode = submitted_mode if submitted_mode in _SUPPORTED_MODES else None
+    if selected_mode is None and identity is not None and identity.setup_pending:
+        selected_mode = identity.pending_mode
+    if selected_mode is None:
+        selected_mode = upstream_mode
     needs_initial_choice = identity is None or (
         identity is not None
         and _google_connection(user_data or {}) is None
-        and _has_attempt_history(session, user.id)
-        and not _has_confirmed_setup(session, user.id)
+        and identity.setup_pending
     )
     flash = request.session.pop(_FLASH_SESSION_KEY, {})
     success = flash.get("message") if flash.get("kind") == "success" else None
@@ -188,7 +189,6 @@ def _invalidate_pending_attempts(session: Session, user_id: int) -> None:
     session.execute(
         delete(CalendarOAuthAttempt).where(
             CalendarOAuthAttempt.expires_at < now,
-            CalendarOAuthAttempt.confirmed_at.is_(None),
         )
     )
     session.execute(
@@ -198,55 +198,6 @@ def _invalidate_pending_attempts(session: Session, user_id: int) -> None:
             CalendarOAuthAttempt.return_consumed_at.is_(None),
         )
         .values(expires_at=now)
-    )
-    session.commit()
-
-
-def _has_confirmed_setup(session: Session, user_id: int) -> bool:
-    return (
-        session.scalar(
-            select(CalendarOAuthAttempt.id)
-            .where(
-                CalendarOAuthAttempt.user_id == user_id,
-                CalendarOAuthAttempt.confirmed_at.is_not(None),
-            )
-            .limit(1)
-        )
-        is not None
-    )
-
-
-def _has_attempt_history(session: Session, user_id: int) -> bool:
-    return (
-        session.scalar(
-            select(CalendarOAuthAttempt.id)
-            .where(CalendarOAuthAttempt.user_id == user_id)
-            .limit(1)
-        )
-        is not None
-    )
-
-
-def _remember_unconfirmed_mode(
-    request: Request,
-    session: Session,
-    user_id: int,
-    mode: str,
-) -> None:
-    """Retain first-setup intent if token minting fails after identity creation."""
-
-    if _has_attempt_history(session, user_id):
-        return
-    marker = secrets.token_urlsafe(32)
-    session.add(
-        CalendarOAuthAttempt(
-            user_id=user_id,
-            state_digest=_digest(f"failed-state:{marker}"),
-            session_digest=_session_digest(request, create=True),
-            return_nonce_digest=_digest(f"failed-return:{marker}"),
-            requested_mode=mode,
-            expires_at=utcnow() + _ATTEMPT_TTL,
-        )
     )
     session.commit()
 
@@ -283,12 +234,8 @@ def calendar_connect(
             requested_mode = mode
         else:
             with CalendarClient(identity.external_id) as existing_calendar:
-                existing_user = existing_calendar.get_user()
-            failed_first_setup = (
-                _google_connection(existing_user) is None
-                and _has_attempt_history(session, user.id)
-                and not _has_confirmed_setup(session, user.id)
-            )
+                existing_calendar.get_user()
+            failed_first_setup = identity.setup_pending
             if failed_first_setup:
                 if mode not in _SUPPORTED_MODES:
                     return _redirect(
@@ -296,6 +243,9 @@ def calendar_connect(
                     )
                 requested_mode = mode
 
+        if requested_mode:
+            identity.pending_mode = requested_mode
+            session.commit()
         _invalidate_pending_attempts(session, user.id)
         with CalendarClient(identity.external_id) as calendar:
             calendar_token = calendar.authenticate()
@@ -303,9 +253,6 @@ def calendar_connect(
         return _redirect(request, "error", str(exc))
     except CalendarError as exc:
         if requested_mode and identity is not None:
-            _remember_unconfirmed_mode(
-                request, session, identity.user_id, requested_mode
-            )
             request.session[_SUBMITTED_MODE_KEY] = requested_mode
         return _redirect(request, "error", str(exc))
 
@@ -511,11 +458,8 @@ def calendar_oauth_return(
             request.session[_SUBMITTED_MODE_KEY] = attempt.requested_mode
         return _redirect(request, "error", str(exc))
 
-    session.execute(
-        update(CalendarOAuthAttempt)
-        .where(CalendarOAuthAttempt.id == attempt.id)
-        .values(confirmed_at=utcnow())
-    )
+    identity.setup_pending = False
+    identity.pending_mode = None
     session.commit()
     request.session.pop(_SUBMITTED_MODE_KEY, None)
     return _redirect(request, "success", "Google Calendar connected.")
@@ -552,6 +496,10 @@ def calendar_preferences(
         return _redirect(request, "error", str(exc))
 
     request.session.pop(_SUBMITTED_MODE_KEY, None)
+    if identity.setup_pending:
+        identity.setup_pending = False
+        identity.pending_mode = None
+        session.commit()
     return _redirect(request, "success", "Recording preference saved.")
 
 

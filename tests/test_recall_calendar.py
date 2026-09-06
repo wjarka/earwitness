@@ -449,6 +449,7 @@ def test_ensure_identity_reuses_the_committed_mapping(session: Session) -> None:
     second = ensure_identity(session, user, workspace_users=[])
 
     assert first.external_id == second.external_id
+    assert first.setup_pending is True
     assert session.get(CalendarIdentity, user.id).external_id == first.external_id
 
 

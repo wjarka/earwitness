@@ -81,6 +81,7 @@ def ensure_identity(
         candidate = CalendarIdentity(
             user_id=user.id,
             external_id=_new_external_id(),
+            setup_pending=True,
         )
         try:
             with session.begin_nested():
