@@ -229,3 +229,24 @@ def test_autosync_does_not_queue_after_toggle_off(client, session, monkeypatch):
 
     assert result.get("queued") in (None, 0)
     assert _process_jobs(session) == []
+
+
+def _empty_sync_form(html: str) -> str:
+    for form in re.findall(r"<form\b[^>]*action=\"/sync\"[^>]*>[\s\S]*?</form>", html):
+        if "process automatically" not in form:
+            return form
+    raise AssertionError("empty-state Sync form missing")
+
+
+def test_empty_state_sync_does_not_clear_saved_autoprocess(client):
+    client.post("/api/settings/autoprocess", data={"autoprocess": "true"})
+    page = client.get("/meetings?view=all", headers=HTML)
+    assert page.status_code == 200
+    form = _empty_sync_form(page.text)
+    data = dict(re.findall(r'name="([^"]+)"[^>]*value="([^"]*)"', form))
+
+    posted = client.post("/sync", data=data, follow_redirects=False)
+    assert posted.status_code == 303
+
+    again = client.get("/meetings?view=all", headers=HTML)
+    assert "checked" in _autoprocess_input(again.text)

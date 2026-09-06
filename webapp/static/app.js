@@ -82,6 +82,7 @@
   // -----------------------------------------------------------------------
   document.querySelectorAll("[data-autoprocess]").forEach((box) => {
     let inflight = false;
+    let confirmed = box.checked;
     const persist = async () => {
       if (inflight) return;
       inflight = true;
@@ -89,7 +90,6 @@
       try {
         while (true) {
           const intended = box.checked;
-          const previous = !intended;
           box.removeAttribute("aria-invalid");
           const body = new URLSearchParams();
           if (intended) body.set("autoprocess", "true");
@@ -105,12 +105,13 @@
             if (!res.ok) throw new Error("save failed");
           } catch (_) {
             if (box.checked === intended) {
-              box.checked = previous;
+              box.checked = confirmed;
               box.setAttribute("aria-invalid", "true");
               return;
             }
             continue;
           }
+          confirmed = intended;
           if (box.checked === intended) return;
         }
       } finally {
