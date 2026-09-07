@@ -32,10 +32,25 @@ sys.path.insert(
     0, os.environ.get("VERIFY_REPO_ROOT") or str(Path(__file__).resolve().parents[4])
 )
 
-if "output/verify/" not in os.environ.get("DATABASE_URL", ""):
+
+def _db_inside_run_state() -> bool:
+    """True only when DATABASE_URL is a SQLite file inside this run's state dir.
+
+    A substring test on the URL is not enough: `output/verify/../webapp.db`
+    contains the marker and resolves to the shared dev database.
+    """
+    url = os.environ.get("DATABASE_URL", "")
+    state = os.environ.get("VERIFY_STATE", "")
+    if not state or not url.startswith("sqlite:///"):
+        return False
+    db = Path(url[len("sqlite:///") :]).resolve()
+    return db.is_relative_to(Path(state).resolve())
+
+
+if not _db_inside_run_state():
     sys.exit(
-        "refusing: DATABASE_URL is not an output/verify/<run> database; "
-        "source env.sh first"
+        "refusing: DATABASE_URL does not resolve inside VERIFY_STATE "
+        "(output/verify/<run>); source env.sh first"
     )
 
 import webapp.tasks  # noqa: E402,F401  (registers job kinds for enqueue)
