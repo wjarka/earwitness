@@ -12,6 +12,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=env.sh
 source "$HERE/env.sh"
 name="$1"; target="$2"; shift 2
+# The name becomes a file stem inside the run's evidence dir; keep it there.
+case "$name" in
+  ""|.|..|*/*|*[!A-Za-z0-9._-]*) echo "capture: invalid name '$name' (use [A-Za-z0-9._-]+)" >&2; exit 1 ;;
+esac
 case "$target" in http://*|https://*) url="$target" ;; *) url="$VERIFY_URL$target" ;; esac
 mkdir -p "$VERIFY_EVIDENCE"
 out="$VERIFY_EVIDENCE/$name"
