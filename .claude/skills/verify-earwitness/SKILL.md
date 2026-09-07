@@ -158,6 +158,9 @@ All inside this directory; make them executable after checkout
 auth guard (`AUTH_DISABLED` empty) to prove redirects and 401s; the
 Google login itself needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
 
+Run ids are one path segment (`[A-Za-z0-9._-]+`); `env.sh` rejects anything
+else because cleanup removes `output/verify/<run-id>` recursively.
+
 ## Limitations and unresolved prerequisites
 
 - **No API keys in this checkout** (`.env` absent). `sync_recall`,

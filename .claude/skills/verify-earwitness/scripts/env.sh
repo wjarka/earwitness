@@ -14,6 +14,13 @@
 VERIFY_REPO_ROOT="$(git rev-parse --show-toplevel)"
 export VERIFY_REPO_ROOT
 export VERIFY_RUN_ID="${VERIFY_RUN_ID:-${1:-$(date +%Y%m%d-%H%M%S)-$$}}"
+# The id becomes a path segment under output/verify and cleanup runs
+# `rm -rf` on it, so it must be one plain segment: no slashes, no dot-dirs.
+case "$VERIFY_RUN_ID" in
+  ""|.|..|*/*|*[!A-Za-z0-9._-]*)
+    echo "verify-earwitness: invalid run id '$VERIFY_RUN_ID' (use [A-Za-z0-9._-]+)" >&2
+    return 1 2>/dev/null || exit 1 ;;
+esac
 export VERIFY_STATE="$VERIFY_REPO_ROOT/output/verify/$VERIFY_RUN_ID"
 export VERIFY_EVIDENCE="$VERIFY_REPO_ROOT/.verification-evidence/$VERIFY_RUN_ID"
 
