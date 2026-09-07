@@ -120,8 +120,9 @@ $SKILL/scripts/cleanup.sh <run-id>
 ```
 
 Sends TERM (then KILL) only to the pids recorded in this run's state dir
-after checking their cmdline is uvicorn / `webapp.worker`, kills leftover
-listeners on this run's port, archives logs, removes `output/verify/<run-id>/`,
+after checking their cmdline is uvicorn / `webapp.worker`. Any other
+process still listening on the run's port is reported and left untouched,
+since it cannot be proven to be ours. It then archives logs, removes `output/verify/<run-id>/`,
 then re-checks every path in `manifest.txt` and exits 1 if any is missing.
 Clean failed attempts the same way; their captures are still proof.
 
