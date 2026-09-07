@@ -30,15 +30,12 @@ stop() { # stop <pidfile> <expected cmdline fragment>
 }
 stop "$VERIFY_STATE/web.pid" "uvicorn"
 stop "$VERIFY_STATE/worker.pid" "webapp.worker"
-# A listener left on our port is only ours if it is uvicorn started with
-# this exact port; after the run ends the OS may hand the port to anything.
+# Only processes this run recorded (and their children) are ours to signal.
+# A listener still on the port after that is not provably ours: the OS may
+# have handed the port to anything since. Report it, never signal it.
 pids="$(ss -ltnpH "sport = :$VERIFY_PORT" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)"
 for p in $pids; do
-  cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)"
-  case "$cmd" in
-    *uvicorn*"--port $VERIFY_PORT"*) kill -TERM "$p" 2>/dev/null && echo "stopped leftover uvicorn pid $p" ;;
-    *) echo "pid $p listens on $VERIFY_PORT but is not this run's uvicorn; leaving it: '$cmd'" >&2 ;;
-  esac
+  echo "pid $p still listens on $VERIFY_PORT but was not started by this run; left untouched" >&2
 done
 
 mkdir -p "$VERIFY_EVIDENCE"
