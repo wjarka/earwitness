@@ -30,9 +30,16 @@ stop() { # stop <pidfile> <expected cmdline fragment>
 }
 stop "$VERIFY_STATE/web.pid" "uvicorn"
 stop "$VERIFY_STATE/worker.pid" "webapp.worker"
-# Anything still bound to our port belongs to this run's uv wrapper tree.
+# A listener left on our port is only ours if it is uvicorn started with
+# this exact port; after the run ends the OS may hand the port to anything.
 pids="$(ss -ltnpH "sport = :$VERIFY_PORT" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)"
-for p in $pids; do kill -TERM "$p" 2>/dev/null && echo "stopped leftover listener pid $p"; done
+for p in $pids; do
+  cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)"
+  case "$cmd" in
+    *uvicorn*"--port $VERIFY_PORT"*) kill -TERM "$p" 2>/dev/null && echo "stopped leftover uvicorn pid $p" ;;
+    *) echo "pid $p listens on $VERIFY_PORT but is not this run's uvicorn; leaving it: '$cmd'" >&2 ;;
+  esac
+done
 
 mkdir -p "$VERIFY_EVIDENCE"
 for f in web.log worker.log; do
