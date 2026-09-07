@@ -19,14 +19,25 @@ export VERIFY_RUN_ID="${VERIFY_RUN_ID:-}"
 source "$HERE/env.sh"
 
 mkdir -p "$VERIFY_STATE" "$VERIFY_EVIDENCE" "$RECALL_DIR" "$TRANSCRIPTS_DIR"
-echo "$VERIFY_PORT" > "$VERIFY_STATE/port"
-echo "$VERIFY_AUTH" > "$VERIFY_STATE/auth"
-git -C "$VERIFY_REPO_ROOT" rev-parse HEAD > "$VERIFY_STATE/commit"
 cd "$VERIFY_REPO_ROOT"
 
 if [ -f "$VERIFY_STATE/web.pid" ] && kill -0 "$(cat "$VERIFY_STATE/web.pid")" 2>/dev/null; then
-  echo "web already running (pid $(cat "$VERIFY_STATE/web.pid"))"
+  # Reusing a live run: the markers describe THAT server, so they are not
+  # rewritten. A request that contradicts them is a different run.
+  if [ -f "$VERIFY_STATE/auth" ] && [ "$(cat "$VERIFY_STATE/auth")" != "$VERIFY_AUTH" ]; then
+    echo "run $VERIFY_RUN_ID already serves auth=$(cat "$VERIFY_STATE/auth"); asked for $VERIFY_AUTH." >&2
+    echo "cleanup.sh $VERIFY_RUN_ID first, or use another run id." >&2
+    exit 1
+  fi
+  if [ -f "$VERIFY_STATE/commit" ] && [ "$(cat "$VERIFY_STATE/commit")" != "$(git rev-parse HEAD)" ]; then
+    echo "warn: web already running (pid $(cat "$VERIFY_STATE/web.pid")) from $(cut -c1-7 "$VERIFY_STATE/commit"); HEAD is now $(git rev-parse --short HEAD). cleanup.sh + launch.sh to pick up the change." >&2
+  else
+    echo "web already running (pid $(cat "$VERIFY_STATE/web.pid"))"
+  fi
 else
+  echo "$VERIFY_PORT" > "$VERIFY_STATE/port"
+  echo "$VERIFY_AUTH" > "$VERIFY_STATE/auth"
+  git rev-parse HEAD > "$VERIFY_STATE/commit"
   nohup uv run uvicorn webapp.app:app --host 127.0.0.1 --port "$VERIFY_PORT" \
     > "$VERIFY_STATE/web.log" 2>&1 &
   echo $! > "$VERIFY_STATE/web.pid"
