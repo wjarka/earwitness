@@ -40,8 +40,9 @@ uv run python $SKILL/scripts/seed.py dump > $VERIFY_EVIDENCE/repair-state.json; 
   the participant `Ala Testowa`.
 - `repair-api.body` item: `asset_state` `ready`, `user_status` `to_process`,
   participants include `ala@example.com`.
-- `repair-jobs.body` item `result` reports `adopted: 1`; `repair-state.json`
-  shows `recording_id` `rec-verify-3` and `asset_dir` pointing into the run's `RECALL_DIR`.
+- `repair-jobs.body` item has `kind` `repair_assets` and `status` `done` (the API
+  omits `result`); `repair-state.json` has `jobs[0].result.adopted` 1 and the meeting
+  with `recording_id` `rec-verify-3` and `asset_dir` inside the run's `RECALL_DIR`.
 
 ## Gotchas
 
