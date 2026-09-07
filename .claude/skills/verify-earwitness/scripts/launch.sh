@@ -20,6 +20,7 @@ source "$HERE/env.sh"
 
 mkdir -p "$VERIFY_STATE" "$VERIFY_EVIDENCE" "$RECALL_DIR" "$TRANSCRIPTS_DIR"
 echo "$VERIFY_PORT" > "$VERIFY_STATE/port"
+echo "$VERIFY_AUTH" > "$VERIFY_STATE/auth"
 git -C "$VERIFY_REPO_ROOT" rev-parse HEAD > "$VERIFY_STATE/commit"
 cd "$VERIFY_REPO_ROOT"
 

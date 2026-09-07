@@ -41,7 +41,13 @@ export BASE_URL="$VERIFY_URL"
 export SECRET_KEY="verify-run-not-a-secret"
 # VERIFY_AUTH=google keeps the real auth guard on (needs GOOGLE_CLIENT_ID/SECRET
 # for the login itself; the redirect-to-login behaviour needs nothing).
-if [ "${VERIFY_AUTH:-disabled}" = "disabled" ]; then
+# launch.sh persists the mode in the state dir so doctor/capture in another
+# shell see the mode the server actually runs with, not this shell's default.
+if [ -z "${VERIFY_AUTH:-}" ] && [ -f "$VERIFY_STATE/auth" ]; then
+  VERIFY_AUTH="$(cat "$VERIFY_STATE/auth")"
+fi
+export VERIFY_AUTH="${VERIFY_AUTH:-disabled}"
+if [ "$VERIFY_AUTH" = "disabled" ]; then
   export AUTH_DISABLED=1
 else
   export AUTH_DISABLED=

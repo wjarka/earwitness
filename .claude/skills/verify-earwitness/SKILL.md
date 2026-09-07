@@ -156,7 +156,9 @@ All inside this directory; make them executable after checkout
 
 `VERIFY_AUTH=google scripts/launch.sh` starts the instance with the real
 auth guard (`AUTH_DISABLED` empty) to prove redirects and 401s; the
-Google login itself needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
+Google login itself needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. Launch
+persists the mode in `output/verify/<run-id>/auth`, so `doctor.sh` and
+`capture.sh` in another shell read the mode the server runs with.
 
 Run ids are one path segment (`[A-Za-z0-9._-]+`); `env.sh` rejects anything
 else because cleanup removes `output/verify/<run-id>` recursively.
