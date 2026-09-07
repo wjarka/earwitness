@@ -85,11 +85,16 @@ def scenario_transcript(s) -> dict:
     )
     s.merge(m)
     s.flush()
+    # Re-drives in one run must not trip the (meeting_id, source, key) unique
+    # constraint or pile up transcripts: replace this meeting's fixtures.
+    s.query(MeetingParticipant).filter_by(meeting_id=mid).delete()
+    s.query(Transcript).filter_by(meeting_id=mid).delete()
+    s.flush()
     for name, email, secs in (
         ("Ala Testowa", "ala@example.com", 12.0),
         ("Bob Example", "bob@example.com", 6.0),
     ):
-        s.merge(
+        s.add(
             MeetingParticipant(
                 meeting_id=mid,
                 source="recall",
