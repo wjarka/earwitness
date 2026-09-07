@@ -12,12 +12,14 @@ button is absent, not disabled, when the file is missing.
 ## Reach it
 
 Signed-in user; meeting with `asset_dir` containing `audio_mixed*.mp3`
-(`seed.py recording`).
+(`seed.py recording`). The missing-file case needs a meeting that exists
+without `asset_dir` (`seed.py transcript`).
 
 ## Recipe
 
 ```bash
 uv run python $SKILL/scripts/seed.py recording
+uv run python $SKILL/scripts/seed.py transcript   # has recording_id but no asset_dir
 $SKILL/scripts/capture.sh rec-detail /meetings/bot-verify-recording -H 'accept: text/html'
 $SKILL/scripts/capture.sh rec-download /meetings/bot-verify-recording/recording
 $SKILL/scripts/capture.sh rec-missing /meetings/bot-verify-transcript/recording
